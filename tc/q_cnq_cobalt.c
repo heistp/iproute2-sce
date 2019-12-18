@@ -238,7 +238,7 @@ static int cnq_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 			}
 		} else if (strcmp(*argv, "sce-thresh") == 0) {
 			NEXT_ARG();
-			if (get_u32(&sce, *argv, 0) || sce < 1 || sce > 1024) {
+			if (get_s32(&sce, *argv, 0) || sce < 1 || sce > 1024) {
 				fprintf(stderr,
 					"Illegal value for \"sce-thresh\": \"%s\"\n", *argv);
 				return -1;
@@ -284,17 +284,6 @@ static int cnq_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 
 	tail->rta_len = (void *) NLMSG_TAIL(n) - (void *) tail;
 	return 0;
-}
-
-static void cnq_print_mode(unsigned int value, unsigned int max,
-			    const char *key, const char **table)
-{
-	if (value < max && table[value]) {
-		print_string(PRINT_ANY, key, "%s ", table[value]);
-	} else {
-		print_string(PRINT_JSON, key, NULL, "unknown");
-		print_string(PRINT_FP, NULL, "(?%s?)", key);
-	}
 }
 
 static int cnq_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
