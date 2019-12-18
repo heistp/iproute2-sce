@@ -259,7 +259,7 @@ static int cnq_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 	}
 
 	tail = NLMSG_TAIL(n);
-	addattr_l(n, 1024, TCA_OPTIONS, NULL, 0);
+	addattr_l(n, 1024, TCA_OPTIONS | NLA_F_NESTED, NULL, 0);
 	if (bandwidth || unlimited)
 		addattr_l(n, 1024, TCA_CAKE_BASE_RATE64, &bandwidth,
 			  sizeof(bandwidth));
