@@ -71,21 +71,21 @@ static struct cake_preset *find_preset(char *argv)
 static void explain(void)
 {
 	fprintf(stderr,
-		"Usage: ... cake [ bandwidth RATE | unlimited* | autorate-ingress ]\n"
-		"                [ rtt TIME | datacentre | lan | metro | regional |\n"
-		"                  internet* | oceanic | satellite | interplanetary ]\n"
-		"                [ besteffort | diffserv8 | diffserv4 | diffserv3* ]\n"
-		"                [ flowblind | srchost | dsthost | hosts | flows |\n"
-		"                  dual-srchost | dual-dsthost | triple-isolate* ]\n"
-		"                [ nat | nonat* ]\n"
-		"                [ wash | nowash* ]\n"
-		"                [ split-gso* | no-split-gso ]\n"
-		"                [ ack-filter | ack-filter-aggressive | no-ack-filter* ]\n"
-		"                [ memlimit LIMIT ]\n"
-		"                [ fwmark MASK ]\n"
-		"                [ ptm | atm | noatm* ] [ overhead N | conservative | raw* ]\n"
-		"                [ mpu N ] [ ingress | egress* ]\n"
-		"                (* marks defaults)\n");
+"Usage: ... cake [ bandwidth RATE | unlimited* | autorate-ingress ]\n"
+"                [ rtt TIME | datacentre | lan | metro | regional |\n"
+"                  internet* | oceanic | satellite | interplanetary ]\n"
+"                [ besteffort | diffserv8 | diffserv4 | diffserv3* ]\n"
+"                [ flowblind | srchost | dsthost | hosts | flows |\n"
+"                  dual-srchost | dual-dsthost | triple-isolate* ]\n"
+"                [ nat | nonat* ]\n"
+"                [ wash | nowash* ]\n"
+"                [ split-gso* | no-split-gso ]\n"
+"                [ ack-filter | ack-filter-aggressive | no-ack-filter* ]\n"
+"                [ memlimit LIMIT ]\n"
+"                [ fwmark MASK ]\n"
+"                [ ptm | atm | noatm* ] [ overhead N | conservative | raw* ]\n"
+"                [ mpu N ] [ ingress | egress* ]\n"
+"                (* marks defaults)\n");
 }
 
 static int cake_parse_opt(const struct qdisc_util *qu, int argc, char **argv,
@@ -341,6 +341,15 @@ static int cake_parse_opt(const struct qdisc_util *qu, int argc, char **argv,
 					"Illegal value for \"fwmark\": \"%s\"\n", *argv);
 				return -1;
 			}
+		} else if (strcmp(*argv, "sce-single") == 0) {
+			sce = 0xFFFF;
+		} else if (strcmp(*argv, "sce-thresh") == 0) {
+			NEXT_ARG();
+			if (get_u32(&sce, *argv, 0) || sce < 1 || sce > 1024) {
+				fprintf(stderr,
+					"Illegal value for \"sce-thresh\": \"%s\"\n", *argv);
+				return -1;
+			}
 		} else if (strcmp(*argv, "sce") == 0) {
 			sce = 1;
 		} else if (strcmp(*argv, "no-sce") == 0) {
@@ -533,6 +542,10 @@ static int cake_print_opt(const struct qdisc_util *qu, FILE *f, struct rtattr *o
 	    RTA_PAYLOAD(tb[TCA_CAKE_FWMARK]) >= sizeof(__u32)) {
 		fwmark = rta_getattr_u32(tb[TCA_CAKE_FWMARK]);
 	}
+	if (tb[TCA_CAKE_SCE] &&
+	    RTA_PAYLOAD(tb[TCA_CAKE_SCE]) >= sizeof(__u32)) {
+		sce = rta_getattr_u32(tb[TCA_CAKE_SCE]);
+	}
 
 	if (wash)
 		print_string(PRINT_FP, NULL, "wash ", NULL);
@@ -586,11 +599,15 @@ static int cake_print_opt(const struct qdisc_util *qu, FILE *f, struct rtattr *o
 		print_uint(PRINT_FP, NULL, "fwmark 0x%x ", fwmark);
 	print_0xhex(PRINT_JSON, "fwmark", NULL, fwmark);
 
-	if (sce)
+	if (sce == 1)
 		print_string(PRINT_FP, NULL, "sce ", NULL);
-	else
+	else if(sce > 1024)
+		print_string(PRINT_FP, NULL, "sce-single ", NULL);
+	else if(!sce)
 		print_string(PRINT_FP, NULL, "no-sce ", NULL);
-	print_bool(PRINT_JSON, "sce", NULL, sce);
+	else
+		print_uint(PRINT_FP, NULL, "sce-thresh %u ", sce);
+	print_uint(PRINT_JSON, "sce", NULL, sce);
 
 	return 0;
 }
@@ -817,8 +834,9 @@ static int cake_print_xstats(const struct qdisc_util *qu, FILE *f,
 		PRINT_TSTAT_U32("  way_inds", WAY_INDIRECT_HITS);
 		PRINT_TSTAT_U32("  way_miss", WAY_MISSES);
 		PRINT_TSTAT_U32("  way_cols", WAY_COLLISIONS);
-		PRINT_TSTAT_U32("  drops   ", DROPPED_PACKETS);
+		PRINT_TSTAT_U32("  sce     ", SCE_MARKED_PACKETS);
 		PRINT_TSTAT_U32("  marks   ", ECN_MARKED_PACKETS);
+		PRINT_TSTAT_U32("  drops   ", DROPPED_PACKETS);
 		PRINT_TSTAT_U32("  ack_drop", ACKS_DROPPED_PACKETS);
 		PRINT_TSTAT_U32("  sp_flows", SPARSE_FLOWS);
 		PRINT_TSTAT_U32("  bk_flows", BULK_FLOWS);
@@ -826,7 +844,6 @@ static int cake_print_xstats(const struct qdisc_util *qu, FILE *f,
 		PRINT_TSTAT_U32("  max_len ", MAX_SKBLEN);
 		PRINT_TSTAT_U32("  quantum ", FLOW_QUANTUM);
 
-		PRINT_TSTAT_U32("  sce     ", SCE_MARKED_PACKETS);
 
 #undef GET_STAT
 #undef PRINT_TSTAT
