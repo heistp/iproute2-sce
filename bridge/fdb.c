@@ -30,19 +30,21 @@
 #include "rt_names.h"
 #include "utils.h"
 
-static unsigned int filter_index, filter_vlan, filter_state, filter_master;
+static unsigned int filter_index, filter_dynamic, filter_master,
+	filter_state, filter_vlan;
 
 static void usage(void)
 {
 	fprintf(stderr,
 		"Usage: bridge fdb { add | append | del | replace } ADDR dev DEV\n"
 		"              [ self ] [ master ] [ use ] [ router ] [ extern_learn ]\n"
-		"              [ sticky ] [ local | static | dynamic ] [ dst IPADDR ]\n"
-		"              [ vlan VID ] [ port PORT] [ vni VNI ] [ via DEV ]\n"
-		"              [ src_vni VNI ]\n"
-		"       bridge fdb [ show [ br BRDEV ] [ brport DEV ] [ vlan VID ] [ state STATE ] ]\n"
-		"       bridge fdb get ADDR [ br BRDEV ] { brport |dev }  DEV [ vlan VID ]\n"
-		"              [ vni VNI ]\n");
+		"              [ sticky ] [ local | static | dynamic ] [ vlan VID ]\n"
+		"              { [ dst IPADDR ] [ port PORT] [ vni VNI ] | [ nhid NHID ] }\n"
+		"	       [ via DEV ] [ src_vni VNI ]\n"
+		"       bridge fdb [ show [ br BRDEV ] [ brport DEV ] [ vlan VID ]\n"
+		"              [ state STATE ] [ dynamic ] ]\n"
+		"       bridge fdb get [ to ] LLADDR [ br BRDEV ] { brport | dev } DEV\n"
+		"              [ vlan VID ] [ vni VNI ] [ self ] [ master ] [ dynamic ]\n");
 	exit(-1);
 }
 
@@ -62,7 +64,10 @@ static const char *state_n2a(unsigned int s)
 	if (s & NUD_REACHABLE)
 		return "";
 
-	sprintf(buf, "state=%#x", s);
+	if (is_json_context())
+		sprintf(buf, "%#x", s);
+	else
+		sprintf(buf, "state=%#x", s);
 	return buf;
 }
 
@@ -167,6 +172,9 @@ int print_fdb(struct nlmsghdr *n, void *arg)
 	if (filter_vlan && filter_vlan != vid)
 		return 0;
 
+	if (filter_dynamic && (r->ndm_state & NUD_PERMANENT))
+		return 0;
+
 	open_json_object(NULL);
 	if (n->nlmsg_type == RTM_DELNEIGH)
 		print_bool(PRINT_ANY, "deleted", "Deleted ", true);
@@ -236,6 +244,10 @@ int print_fdb(struct nlmsghdr *n, void *arg)
 					   "viaIf", "via %s ",
 					   ll_index_to_name(ifindex));
 	}
+
+	if (tb[NDA_NH_ID])
+		print_uint(PRINT_ANY, "nhid", "nhid %u ",
+			   rta_getattr_u32(tb[NDA_NH_ID]));
 
 	if (tb[NDA_LINK_NETNSID])
 		print_uint(PRINT_ANY,
@@ -322,6 +334,8 @@ static int fdb_show(int argc, char **argv)
 			if (state_a2n(&state, *argv))
 				invarg("invalid state", *argv);
 			filter_state |= state;
+		} else if (strcmp(*argv, "dynamic") == 0) {
+			filter_dynamic = 1;
 		} else {
 			if (matches(*argv, "help") == 0)
 				usage();
@@ -390,6 +404,7 @@ static int fdb_modify(int cmd, int flags, int argc, char **argv)
 	unsigned int via = 0;
 	char *endptr;
 	short vid = -1;
+	__u32 nhid = 0;
 
 	while (argc > 0) {
 		if (strcmp(*argv, "dev") == 0) {
@@ -401,6 +416,10 @@ static int fdb_modify(int cmd, int flags, int argc, char **argv)
 				duparg2("dst", *argv);
 			get_addr(&dst, *argv, preferred_family);
 			dst_ok = 1;
+		} else if (strcmp(*argv, "nhid") == 0) {
+			NEXT_ARG();
+			if (get_u32(&nhid, *argv, 0))
+				invarg("\"id\" value is invalid\n", *argv);
 		} else if (strcmp(*argv, "port") == 0) {
 
 			NEXT_ARG();
@@ -475,6 +494,11 @@ static int fdb_modify(int cmd, int flags, int argc, char **argv)
 		return -1;
 	}
 
+	if (nhid && (dst_ok || port || vni != ~0)) {
+		fprintf(stderr, "dst, port, vni are mutually exclusive with nhid\n");
+		return -1;
+	}
+
 	/* Assume self */
 	if (!(req.ndm.ndm_flags&(NTF_SELF|NTF_MASTER)))
 		req.ndm.ndm_flags |= NTF_SELF;
@@ -496,6 +520,8 @@ static int fdb_modify(int cmd, int flags, int argc, char **argv)
 
 	if (vid >= 0)
 		addattr16(&req.n, sizeof(req), NDA_VLAN, vid);
+	if (nhid > 0)
+		addattr32(&req.n, sizeof(req), NDA_NH_ID, nhid);
 
 	if (port) {
 		unsigned short dport;
@@ -566,6 +592,8 @@ static int fdb_get(int argc, char **argv)
 				duparg2("vlan", *argv);
 			NEXT_ARG();
 			vlan = atoi(*argv);
+		} else if (matches(*argv, "dynamic") == 0) {
+			filter_dynamic = 1;
 		} else {
 			if (strcmp(*argv, "to") == 0)
 				NEXT_ARG();
@@ -619,10 +647,16 @@ static int fdb_get(int argc, char **argv)
 	if (rtnl_talk(&rth, &req.n, &answer) < 0)
 		return -2;
 
+	/*
+	 * Initialize a json_writer and open an array object
+	 * if -json was specified.
+	 */
+	new_json_obj(json);
 	if (print_fdb(answer, stdout) < 0) {
 		fprintf(stderr, "An error :-)\n");
 		return -1;
 	}
+	delete_json_obj();
 
 	return 0;
 }

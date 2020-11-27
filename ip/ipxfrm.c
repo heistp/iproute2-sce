@@ -34,6 +34,7 @@
 #include <netdb.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
+#include <linux/udp.h>
 
 #include "utils.h"
 #include "xfrm.h"
@@ -753,11 +754,14 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family,
 
 		fprintf(fp, "type ");
 		switch (e->encap_type) {
-		case 1:
+		case UDP_ENCAP_ESPINUDP_NON_IKE:
 			fprintf(fp, "espinudp-nonike ");
 			break;
-		case 2:
+		case UDP_ENCAP_ESPINUDP:
 			fprintf(fp, "espinudp ");
+			break;
+		case TCP_ENCAP_ESPINTCP:
+			fprintf(fp, "espintcp ");
 			break;
 		default:
 			fprintf(fp, "%u ", e->encap_type);
@@ -949,6 +953,9 @@ void xfrm_state_info_print(struct xfrm_usersa_info *xsinfo,
 		XFRM_FLAG_PRINT(fp, extra_flags,
 				XFRM_SA_XFLAG_DONT_ENCAP_DSCP,
 				"dont-encap-dscp");
+		XFRM_FLAG_PRINT(fp, extra_flags,
+				XFRM_SA_XFLAG_OSEQ_MAY_WRAP,
+				"oseq-may-wrap");
 		if (extra_flags)
 			fprintf(fp, "%x", extra_flags);
 	}
@@ -1208,9 +1215,11 @@ int xfrm_encap_type_parse(__u16 *type, int *argcp, char ***argvp)
 	char **argv = *argvp;
 
 	if (strcmp(*argv, "espinudp-nonike") == 0)
-		*type = 1;
+		*type = UDP_ENCAP_ESPINUDP_NON_IKE;
 	else if (strcmp(*argv, "espinudp") == 0)
-		*type = 2;
+		*type = UDP_ENCAP_ESPINUDP;
+	else if (strcmp(*argv, "espintcp") == 0)
+		*type = TCP_ENCAP_ESPINTCP;
 	else
 		invarg("ENCAP-TYPE value is invalid", *argv);
 

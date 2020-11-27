@@ -104,33 +104,15 @@ static void usage(void)
 		"FLAG-LIST := [ FLAG-LIST ] FLAG\n"
 		"FLAG := noecn | decap-dscp | nopmtudisc | wildrecv | icmp | af-unspec | align4 | esn\n"
 		"EXTRA-FLAG-LIST := [ EXTRA-FLAG-LIST ] EXTRA-FLAG\n"
-		"EXTRA-FLAG := dont-encap-dscp\n"
+		"EXTRA-FLAG := dont-encap-dscp | oseq-may-wrap\n"
 		"SELECTOR := [ src ADDR[/PLEN] ] [ dst ADDR[/PLEN] ] [ dev DEV ] [ UPSPEC ]\n"
-		"UPSPEC := proto { { ");
-	fprintf(stderr,
-		"%s | %s | %s | %s",
-		strxf_proto(IPPROTO_TCP),
-		strxf_proto(IPPROTO_UDP),
-		strxf_proto(IPPROTO_SCTP),
-		strxf_proto(IPPROTO_DCCP));
-	fprintf(stderr,
-		" } [ sport PORT ] [ dport PORT ] |\n"
-		"                  { ");
-	fprintf(stderr,
-		"%s | %s | %s",
-		strxf_proto(IPPROTO_ICMP),
-		strxf_proto(IPPROTO_ICMPV6),
-		strxf_proto(IPPROTO_MH));
-	fprintf(stderr,
-		" } [ type NUMBER ] [ code NUMBER ] |\n");
-	fprintf(stderr,
-		"                  %s", strxf_proto(IPPROTO_GRE));
-	fprintf(stderr,
-		" [ key { DOTTED-QUAD | NUMBER } ] | PROTO }\n"
+		"UPSPEC := proto { { tcp | udp | sctp | dccp } [ sport PORT ] [ dport PORT ] |\n"
+		"                  { icmp | ipv6-icmp | mobility-header } [ type NUMBER ] [ code NUMBER ] |\n"
+		"                  gre [ key { DOTTED-QUAD | NUMBER } ] | PROTO }\n"
 		"LIMIT-LIST := [ LIMIT-LIST ] limit LIMIT\n"
 		"LIMIT := { time-soft | time-hard | time-use-soft | time-use-hard } SECONDS |\n"
 		"         { byte-soft | byte-hard } SIZE | { packet-soft | packet-hard } COUNT\n"
-		"ENCAP := { espinudp | espinudp-nonike } SPORT DPORT OADDR\n"
+		"ENCAP := { espinudp | espinudp-nonike | espintcp } SPORT DPORT OADDR\n"
 		"DIR := in | out\n");
 
 	exit(-1);
@@ -271,6 +253,8 @@ static int xfrm_state_extra_flag_parse(__u32 *extra_flags, int *argcp, char ***a
 		while (1) {
 			if (strcmp(*argv, "dont-encap-dscp") == 0)
 				*extra_flags |= XFRM_SA_XFLAG_DONT_ENCAP_DSCP;
+			else if (strcmp(*argv, "oseq-may-wrap") == 0)
+				*extra_flags |= XFRM_SA_XFLAG_OSEQ_MAY_WRAP;
 			else {
 				PREV_ARG(); /* back track */
 				break;
@@ -1147,6 +1131,10 @@ static int xfrm_state_keep(struct nlmsghdr *n, void *arg)
 	}
 
 	if (!xfrm_state_filter_match(xsinfo))
+		return 0;
+
+	if (xsinfo->id.proto == IPPROTO_IPIP ||
+	    xsinfo->id.proto == IPPROTO_IPV6)
 		return 0;
 
 	if (xb->offset > xb->size) {
