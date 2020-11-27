@@ -450,6 +450,7 @@ static const enum mnl_attr_data_type nldev_policy[RDMA_NLDEV_ATTR_MAX] = {
 	[RDMA_NLDEV_ATTR_STAT_RES] = MNL_TYPE_U32,
 	[RDMA_NLDEV_ATTR_STAT_AUTO_MODE_MASK] = MNL_TYPE_U32,
 	[RDMA_NLDEV_ATTR_DEV_DIM] = MNL_TYPE_U8,
+	[RDMA_NLDEV_ATTR_RES_RAW] = MNL_TYPE_BINARY,
 };
 
 int rd_attr_check(const struct nlattr *attr, int *typep)
@@ -548,8 +549,7 @@ int rd_exec_link(struct rd *rd, int (*cb)(struct rd *rd), bool strict_port)
 	uint32_t port;
 	int ret = 0;
 
-	if (rd->json_output)
-		jsonw_start_array(rd->jw);
+	new_json_obj(rd->json_output);
 	if (rd_no_arg(rd)) {
 		list_for_each_entry(dev_map, &rd->dev_map_list, list) {
 			rd->dev_idx = dev_map->idx;
@@ -589,8 +589,7 @@ int rd_exec_link(struct rd *rd, int (*cb)(struct rd *rd), bool strict_port)
 	}
 
 out:
-	if (rd->json_output)
-		jsonw_end_array(rd->jw);
+	delete_json_obj();
 	return ret;
 }
 
@@ -599,8 +598,7 @@ int rd_exec_dev(struct rd *rd, int (*cb)(struct rd *rd))
 	struct dev_map *dev_map;
 	int ret = 0;
 
-	if (rd->json_output)
-		jsonw_start_array(rd->jw);
+	new_json_obj(rd->json_output);
 	if (rd_no_arg(rd)) {
 		list_for_each_entry(dev_map, &rd->dev_map_list, list) {
 			rd->dev_idx = dev_map->idx;
@@ -620,8 +618,7 @@ int rd_exec_dev(struct rd *rd, int (*cb)(struct rd *rd))
 		ret = cb(rd);
 	}
 out:
-	if (rd->json_output)
-		jsonw_end_array(rd->jw);
+	delete_json_obj();
 	return ret;
 }
 
@@ -766,28 +763,22 @@ struct dev_map *dev_map_lookup(struct rd *rd, bool allow_port_index)
 
 void newline(struct rd *rd)
 {
-	if (rd->json_output)
-		jsonw_end_array(rd->jw);
-	else
-		pr_out("\n");
+	close_json_object();
+	print_color_string(PRINT_FP, COLOR_NONE, NULL, "\n", NULL);
 }
 
 void newline_indent(struct rd *rd)
 {
 	newline(rd);
-	if (!rd->json_output)
-		pr_out("    ");
+	print_color_string(PRINT_FP, COLOR_NONE, NULL, "    ", NULL);
 }
 
 static int print_driver_string(struct rd *rd, const char *key_str,
 				 const char *val_str)
 {
-	if (rd->json_output) {
-		jsonw_string_field(rd->jw, key_str, val_str);
-		return 0;
-	} else {
-		return pr_out("%s %s ", key_str, val_str);
-	}
+	print_color_string(PRINT_ANY, COLOR_NONE, key_str, key_str, val_str);
+	print_color_string(PRINT_FP, COLOR_NONE, NULL, " %s ", val_str);
+	return 0;
 }
 
 void print_on_off(struct rd *rd, const char *key_str, bool on)
@@ -798,69 +789,69 @@ void print_on_off(struct rd *rd, const char *key_str, bool on)
 static int print_driver_s32(struct rd *rd, const char *key_str, int32_t val,
 			      enum rdma_nldev_print_type print_type)
 {
-	if (rd->json_output) {
-		jsonw_int_field(rd->jw, key_str, val);
-		return 0;
+	if (!rd->json_output) {
+		switch (print_type) {
+		case RDMA_NLDEV_PRINT_TYPE_UNSPEC:
+			return pr_out("%s %d ", key_str, val);
+		case RDMA_NLDEV_PRINT_TYPE_HEX:
+			return pr_out("%s 0x%x ", key_str, val);
+		default:
+			return -EINVAL;
+		}
 	}
-	switch (print_type) {
-	case RDMA_NLDEV_PRINT_TYPE_UNSPEC:
-		return pr_out("%s %d ", key_str, val);
-	case RDMA_NLDEV_PRINT_TYPE_HEX:
-		return pr_out("%s 0x%x ", key_str, val);
-	default:
-		return -EINVAL;
-	}
+	print_color_int(PRINT_JSON, COLOR_NONE, key_str, NULL, val);
+	return 0;
 }
 
 static int print_driver_u32(struct rd *rd, const char *key_str, uint32_t val,
 			      enum rdma_nldev_print_type print_type)
 {
-	if (rd->json_output) {
-		jsonw_int_field(rd->jw, key_str, val);
-		return 0;
+	if (!rd->json_output) {
+		switch (print_type) {
+		case RDMA_NLDEV_PRINT_TYPE_UNSPEC:
+			return pr_out("%s %u ", key_str, val);
+		case RDMA_NLDEV_PRINT_TYPE_HEX:
+			return pr_out("%s 0x%x ", key_str, val);
+		default:
+			return -EINVAL;
+		}
 	}
-	switch (print_type) {
-	case RDMA_NLDEV_PRINT_TYPE_UNSPEC:
-		return pr_out("%s %u ", key_str, val);
-	case RDMA_NLDEV_PRINT_TYPE_HEX:
-		return pr_out("%s 0x%x ", key_str, val);
-	default:
-		return -EINVAL;
-	}
+	print_color_int(PRINT_JSON, COLOR_NONE, key_str, NULL, val);
+	return 0;
 }
 
 static int print_driver_s64(struct rd *rd, const char *key_str, int64_t val,
 			      enum rdma_nldev_print_type print_type)
 {
-	if (rd->json_output) {
-		jsonw_int_field(rd->jw, key_str, val);
-		return 0;
+	if (!rd->json_output) {
+		switch (print_type) {
+		case RDMA_NLDEV_PRINT_TYPE_UNSPEC:
+			return pr_out("%s %" PRId64 " ", key_str, val);
+		case RDMA_NLDEV_PRINT_TYPE_HEX:
+			return pr_out("%s 0x%" PRIx64 " ", key_str, val);
+		default:
+			return -EINVAL;
+		}
 	}
-	switch (print_type) {
-	case RDMA_NLDEV_PRINT_TYPE_UNSPEC:
-		return pr_out("%s %" PRId64 " ", key_str, val);
-	case RDMA_NLDEV_PRINT_TYPE_HEX:
-		return pr_out("%s 0x%" PRIx64 " ", key_str, val);
-	default:
-		return -EINVAL;
-	}
+	print_color_int(PRINT_JSON, COLOR_NONE, key_str, NULL, val);
+	return 0;
 }
 
 static int print_driver_u64(struct rd *rd, const char *key_str, uint64_t val,
 			      enum rdma_nldev_print_type print_type)
 {
-	if (rd->json_output) {
-		jsonw_int_field(rd->jw, key_str, val);
-		return 0;
+	if (!rd->json_output) {
+		switch (print_type) {
+		case RDMA_NLDEV_PRINT_TYPE_UNSPEC:
+			return pr_out("%s %" PRIu64 " ", key_str, val);
+		case RDMA_NLDEV_PRINT_TYPE_HEX:
+			return pr_out("%s 0x%" PRIx64 " ", key_str, val);
+		default:
+			return -EINVAL;
+		}
 	}
-	switch (print_type) {
-	case RDMA_NLDEV_PRINT_TYPE_UNSPEC:
-		return pr_out("%s %" PRIu64 " ", key_str, val);
-	case RDMA_NLDEV_PRINT_TYPE_HEX:
-		return pr_out("%s 0x%" PRIx64 " ", key_str, val);
-	default:
-		return -EINVAL;
-	}
+	print_color_int(PRINT_JSON, COLOR_NONE, key_str, NULL, val);
+	return 0;
 }
 
 static int print_driver_entry(struct rd *rd, struct nlattr *key_attr,
@@ -898,6 +889,25 @@ static int print_driver_entry(struct rd *rd, struct nlattr *key_attr,
 	}
 	free(key_str);
 	return ret;
+}
+
+void print_raw_data(struct rd *rd, struct nlattr **nla_line)
+{
+	uint8_t *data;
+	uint32_t len;
+	int i = 0;
+
+	if (!rd->show_raw)
+		return;
+
+	len = mnl_attr_get_payload_len(nla_line[RDMA_NLDEV_ATTR_RES_RAW]);
+	data = mnl_attr_get_payload(nla_line[RDMA_NLDEV_ATTR_RES_RAW]);
+	open_json_array(PRINT_JSON, "data");
+	while (i < len) {
+		print_color_uint(PRINT_ANY, COLOR_NONE, NULL, "%d", data[i]);
+		i++;
+	}
+	close_json_array(PRINT_ANY, ">");
 }
 
 void print_driver_table(struct rd *rd, struct nlattr *tb)

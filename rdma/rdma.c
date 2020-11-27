@@ -5,14 +5,15 @@
  */
 
 #include "rdma.h"
-#include "SNAPSHOT.h"
+#include "version.h"
+#include "color.h"
 
 static void help(char *name)
 {
 	pr_out("Usage: %s [ OPTIONS ] OBJECT { COMMAND | help }\n"
 	       "       %s [ -f[orce] ] -b[atch] filename\n"
 	       "where  OBJECT := { dev | link | resource | system | statistic | help }\n"
-	       "       OPTIONS := { -V[ersion] | -d[etails] | -j[son] | -p[retty]}\n", name, name);
+	       "       OPTIONS := { -V[ersion] | -d[etails] | -j[son] | -p[retty] -r[aw]}\n", name, name);
 }
 
 static int cmd_help(struct rd *rd)
@@ -85,15 +86,6 @@ static int rd_init(struct rd *rd, char *filename)
 	INIT_LIST_HEAD(&rd->dev_map_list);
 	INIT_LIST_HEAD(&rd->filter_list);
 
-	if (rd->json_output) {
-		rd->jw = jsonw_new(stdout);
-		if (!rd->jw) {
-			pr_err("Failed to create JSON writer\n");
-			return -ENOMEM;
-		}
-		jsonw_pretty(rd->jw, rd->pretty_output);
-	}
-
 	rd->buff = malloc(MNL_SOCKET_BUFFER_SIZE);
 	if (!rd->buff)
 		return -ENOMEM;
@@ -109,8 +101,6 @@ static int rd_init(struct rd *rd, char *filename)
 
 static void rd_cleanup(struct rd *rd)
 {
-	if (rd->json_output)
-		jsonw_destroy(&rd->jw);
 	rd_free(rd);
 }
 
@@ -122,32 +112,32 @@ int main(int argc, char **argv)
 		{ "json",		no_argument,		NULL, 'j' },
 		{ "pretty",		no_argument,		NULL, 'p' },
 		{ "details",		no_argument,		NULL, 'd' },
+		{ "raw",		no_argument,		NULL, 'r' },
 		{ "force",		no_argument,		NULL, 'f' },
 		{ "batch",		required_argument,	NULL, 'b' },
 		{ NULL, 0, NULL, 0 }
 	};
 	bool show_driver_details = false;
 	const char *batch_file = NULL;
-	bool pretty_output = false;
 	bool show_details = false;
 	bool json_output = false;
+	bool show_raw = false;
 	bool force = false;
 	struct rd rd = {};
 	char *filename;
 	int opt;
 	int err;
-
 	filename = basename(argv[0]);
 
-	while ((opt = getopt_long(argc, argv, ":Vhdpjfb:",
+	while ((opt = getopt_long(argc, argv, ":Vhdrpjfb:",
 				  long_options, NULL)) >= 0) {
 		switch (opt) {
 		case 'V':
-			printf("%s utility, iproute2-ss%s\n",
-			       filename, SNAPSHOT);
+			printf("%s utility, iproute2-%s\n",
+			       filename, version);
 			return EXIT_SUCCESS;
 		case 'p':
-			pretty_output = true;
+			pretty = 1;
 			break;
 		case 'd':
 			if (show_details)
@@ -155,8 +145,11 @@ int main(int argc, char **argv)
 			else
 				show_details = true;
 			break;
+		case 'r':
+			show_raw = true;
+			break;
 		case 'j':
-			json_output = true;
+			json_output = 1;
 			break;
 		case 'f':
 			force = true;
@@ -183,7 +176,8 @@ int main(int argc, char **argv)
 	rd.show_details = show_details;
 	rd.show_driver_details = show_driver_details;
 	rd.json_output = json_output;
-	rd.pretty_output = pretty_output;
+	rd.pretty_output = pretty;
+	rd.show_raw = show_raw;
 
 	err = rd_init(&rd, filename);
 	if (err)

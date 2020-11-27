@@ -19,7 +19,7 @@
 
 #include "list.h"
 #include "utils.h"
-#include "json_writer.h"
+#include "json_print.h"
 
 #define pr_err(args...) fprintf(stderr, ##args)
 #define pr_out(args...) fprintf(stdout, ##args)
@@ -57,8 +57,9 @@ struct rd {
 	int argc;
 	char **argv;
 	char *filename;
-	bool show_details;
-	bool show_driver_details;
+	uint8_t show_details:1;
+	uint8_t show_driver_details:1;
+	uint8_t show_raw:1;
 	struct list_head dev_map_list;
 	uint32_t dev_idx;
 	uint32_t port_idx;
@@ -66,8 +67,8 @@ struct rd {
 	struct nlmsghdr *nlh;
 	char *buff;
 	json_writer_t *jw;
-	bool json_output;
-	bool pretty_output;
+	int json_output;
+	int pretty_output;
 	bool suppress_errors;
 	struct list_head filter_list;
 	char *link_name;
@@ -134,9 +135,11 @@ int rd_attr_check(const struct nlattr *attr, int *typep);
  * Print helpers
  */
 void print_driver_table(struct rd *rd, struct nlattr *tb);
+void print_raw_data(struct rd *rd, struct nlattr **nla_line);
 void newline(struct rd *rd);
 void newline_indent(struct rd *rd);
 void print_on_off(struct rd *rd, const char *key_str, bool on);
+void print_raw_data(struct rd *rd, struct nlattr **nla_line);
 #define MAX_LINE_LENGTH 80
 
 #endif /* _RDMA_TOOL_H_ */
