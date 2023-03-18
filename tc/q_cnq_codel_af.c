@@ -298,7 +298,6 @@ static int cnq_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	int sce = 0;
 
 	SPRINT_BUF(b1);
-	SPRINT_BUF(b2);
 
 	if (opt == NULL)
 		return 0;
@@ -309,9 +308,9 @@ static int cnq_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	    RTA_PAYLOAD(tb[TCA_CAKE_BASE_RATE64]) >= sizeof(bandwidth)) {
 		bandwidth = rta_getattr_u64(tb[TCA_CAKE_BASE_RATE64]);
 		if (bandwidth) {
-			print_uint(PRINT_JSON, "bandwidth", NULL, bandwidth);
-			print_string(PRINT_FP, NULL, "bandwidth %s ",
-				     sprint_rate(bandwidth, b1));
+			tc_print_rate(PRINT_ANY, "bandwidth", "bandwidth %s ",
+				      bandwidth);
+
 		} else
 			print_string(PRINT_ANY, "bandwidth", "bandwidth %s ",
 				     "unlimited");
@@ -342,7 +341,7 @@ static int cnq_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 
 	if (interval)
 		print_string(PRINT_FP, NULL, "rtt %s ",
-			     sprint_time(interval, b2));
+			     sprint_time(interval, b1));
 	print_uint(PRINT_JSON, "rtt", NULL, interval);
 
 	if (raw)
