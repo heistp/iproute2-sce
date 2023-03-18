@@ -9,6 +9,7 @@ const char *rtnl_rtscope_n2a(int id, char *buf, int len);
 const char *rtnl_rttable_n2a(__u32 id, char *buf, int len);
 const char *rtnl_rtrealm_n2a(int id, char *buf, int len);
 const char *rtnl_dsfield_n2a(int id, char *buf, int len);
+const char *rtnl_dsfield_get_name(int id);
 const char *rtnl_group_n2a(int id, char *buf, int len);
 
 int rtnl_rtprot_a2n(__u32 *id, const char *arg);
@@ -29,6 +30,9 @@ int ll_addr_a2n(char *lladdr, int len, const char *arg);
 
 const char * ll_proto_n2a(unsigned short id, char *buf, int len);
 int ll_proto_a2n(unsigned short *id, const char *buf);
+
+const char *ppp_proto_n2a(unsigned short id, char *buf, int len);
+int ppp_proto_a2n(unsigned short *id, const char *buf);
 
 const char *nl_proto_n2a(int id, char *buf, int len);
 int nl_proto_a2n(__u32 *id, const char *arg);

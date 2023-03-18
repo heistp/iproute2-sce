@@ -44,7 +44,8 @@ static void usage(void)
 		"Usage: ip rule { add | del } SELECTOR ACTION\n"
 		"       ip rule { flush | save | restore }\n"
 		"       ip rule [ list [ SELECTOR ]]\n"
-		"SELECTOR := [ not ] [ from PREFIX ] [ to PREFIX ] [ tos TOS ] [ fwmark FWMARK[/MASK] ]\n"
+		"SELECTOR := [ not ] [ from PREFIX ] [ to PREFIX ] [ tos TOS ]\n"
+		"            [ fwmark FWMARK[/MASK] ]\n"
 		"            [ iif STRING ] [ oif STRING ] [ pref NUMBER ] [ l3mdev ]\n"
 		"            [ uidrange NUMBER-NUMBER ]\n"
 		"            [ ipproto PROTOCOL ]\n"
@@ -591,7 +592,8 @@ static int iprule_list_flush_or_save(int argc, char **argv, int action)
 			filter.prefmask = 1;
 		} else if (strcmp(*argv, "not") == 0) {
 			filter.not = 1;
-		} else if (strcmp(*argv, "tos") == 0) {
+		} else if (strcmp(*argv, "tos") == 0 ||
+			   strcmp(*argv, "dsfield") == 0) {
 			__u32 tos;
 
 			NEXT_ARG();
@@ -785,6 +787,7 @@ static int iprule_modify(int cmd, int argc, char **argv)
 		.frh.family = preferred_family,
 		.frh.action = FR_ACT_UNSPEC,
 	};
+	int ret;
 
 	if (cmd == RTM_NEWRULE) {
 		if (argc == 0) {
@@ -1014,7 +1017,12 @@ static int iprule_modify(int cmd, int argc, char **argv)
 	if (!table_ok && cmd == RTM_NEWRULE)
 		req.frh.table = RT_TABLE_MAIN;
 
-	if (rtnl_talk(&rth, &req.n, NULL) < 0)
+	if (echo_request)
+		ret = rtnl_echo_talk(&rth, &req.n, json, print_rule);
+	else
+		ret = rtnl_talk(&rth, &req.n, NULL);
+
+	if (ret)
 		return -2;
 
 	return 0;

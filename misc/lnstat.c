@@ -210,8 +210,9 @@ static struct table_hdr *build_hdr_string(struct lnstat_file *lnstat_files,
 		}
 		ofs += width+1;
 	}
+
 	/* fill in spaces */
-	for (h = 1; h <= th.num_lines; h++) {
+	for (h = 1; h < th.num_lines; h++) {
 		for (i = 0; i < ofs; i++) {
 			if (th.hdr[h][i] == '\0')
 				th.hdr[h][i] = ' ';
@@ -330,6 +331,7 @@ int main(int argc, char **argv)
 				for (i = 0; i < MAX_FIELDS; i++)
 					fp.params[i].print.width = len;
 			}
+			free(tmp);
 			break;
 		default:
 			usage(argv[0], 1);

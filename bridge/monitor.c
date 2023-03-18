@@ -31,7 +31,7 @@ static int prefix_banner;
 
 static void usage(void)
 {
-	fprintf(stderr, "Usage: bridge monitor [file | link | fdb | mdb | all]\n");
+	fprintf(stderr, "Usage: bridge monitor [file | link | fdb | mdb | vlan | vni | all]\n");
 	exit(-1);
 }
 
@@ -40,36 +40,43 @@ static int accept_msg(struct rtnl_ctrl_data *ctrl,
 {
 	FILE *fp = arg;
 
-	if (timestamp)
-		print_timestamp(fp);
-
 	switch (n->nlmsg_type) {
 	case RTM_NEWLINK:
 	case RTM_DELLINK:
-		if (prefix_banner)
-			fprintf(fp, "[LINK]");
-
 		return print_linkinfo(n, arg);
 
 	case RTM_NEWNEIGH:
 	case RTM_DELNEIGH:
-		if (prefix_banner)
-			fprintf(fp, "[NEIGH]");
 		return print_fdb(n, arg);
 
 	case RTM_NEWMDB:
 	case RTM_DELMDB:
-		if (prefix_banner)
-			fprintf(fp, "[MDB]");
 		return print_mdb_mon(n, arg);
 
 	case NLMSG_TSTAMP:
 		print_nlmsg_timestamp(fp, n);
 		return 0;
 
+	case RTM_NEWVLAN:
+	case RTM_DELVLAN:
+		return print_vlan_rtm(n, arg, true, false);
+
+	case RTM_NEWTUNNEL:
+	case RTM_DELTUNNEL:
+		return print_vnifilter_rtm(n, arg, true);
+
 	default:
 		return 0;
 	}
+}
+
+void print_headers(FILE *fp, const char *label)
+{
+	if (timestamp)
+		print_timestamp(fp);
+
+	if (prefix_banner)
+		fprintf(fp, "%s", label);
 }
 
 int do_monitor(int argc, char **argv)
@@ -79,6 +86,8 @@ int do_monitor(int argc, char **argv)
 	int llink = 0;
 	int lneigh = 0;
 	int lmdb = 0;
+	int lvlan = 0;
+	int lvni = 0;
 
 	rtnl_close(&rth);
 
@@ -95,8 +104,16 @@ int do_monitor(int argc, char **argv)
 		} else if (matches(*argv, "mdb") == 0) {
 			lmdb = 1;
 			groups = 0;
+		} else if (matches(*argv, "vlan") == 0) {
+			lvlan = 1;
+			groups = 0;
+		} else if (strcmp(*argv, "vni") == 0) {
+			lvni = 1;
+			groups = 0;
 		} else if (strcmp(*argv, "all") == 0) {
 			groups = ~RTMGRP_TC;
+			lvlan = 1;
+			lvni = 1;
 			prefix_banner = 1;
 		} else if (matches(*argv, "help") == 0) {
 			usage();
@@ -134,6 +151,17 @@ int do_monitor(int argc, char **argv)
 
 	if (rtnl_open(&rth, groups) < 0)
 		exit(1);
+
+	if (lvlan && rtnl_add_nl_group(&rth, RTNLGRP_BRVLAN) < 0) {
+		fprintf(stderr, "Failed to add bridge vlan group to list\n");
+		exit(1);
+	}
+
+	if (lvni && rtnl_add_nl_group(&rth, RTNLGRP_TUNNEL) < 0) {
+		fprintf(stderr, "Failed to add bridge vni group to list\n");
+		exit(1);
+	}
+
 	ll_init_map(&rth);
 
 	if (rtnl_listen(&rth, accept_msg, stdout) < 0)

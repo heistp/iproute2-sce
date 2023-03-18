@@ -17,9 +17,6 @@
 
 static json_writer_t *_jw;
 
-#define _IS_JSON_CONTEXT(type) ((type & PRINT_JSON || type & PRINT_ANY) && _jw)
-#define _IS_FP_CONTEXT(type) (!_jw && (type & PRINT_FP || type & PRINT_ANY))
-
 static void __new_json_obj(int json, bool have_array)
 {
 	if (json) {
@@ -191,11 +188,12 @@ int print_color_string(enum output_type type,
  * a value to it, you will need to use "is_json_context()" to have different
  * branch for json and regular output. grep -r "print_bool" for example
  */
-int print_color_bool(enum output_type type,
-		     enum color_attr color,
-		     const char *key,
-		     const char *fmt,
-		     bool value)
+static int __print_color_bool(enum output_type type,
+			      enum color_attr color,
+			      const char *key,
+			      const char *fmt,
+			      bool value,
+			      const char *str)
 {
 	int ret = 0;
 
@@ -205,11 +203,30 @@ int print_color_bool(enum output_type type,
 		else
 			jsonw_bool(_jw, value);
 	} else if (_IS_FP_CONTEXT(type)) {
-		ret = color_fprintf(stdout, color, fmt,
-				    value ? "true" : "false");
+		ret = color_fprintf(stdout, color, fmt, str);
 	}
 
 	return ret;
+}
+
+int print_color_bool(enum output_type type,
+		     enum color_attr color,
+		     const char *key,
+		     const char *fmt,
+		     bool value)
+{
+	return __print_color_bool(type, color, key, fmt, value,
+				  value ? "true" : "false");
+}
+
+int print_color_on_off(enum output_type type,
+		       enum color_attr color,
+		       const char *key,
+		       const char *fmt,
+		       bool value)
+{
+	return __print_color_bool(type, color, key, fmt, value,
+				  value ? "on" : "off");
 }
 
 /*
@@ -282,9 +299,63 @@ int print_color_null(enum output_type type,
 	return ret;
 }
 
+/*
+ * This function does take printf style argument but applying
+ * format attribute to causes more warnings since the print_XXX
+ * functions are used with NULL for format if unused.
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+int print_color_tv(enum output_type type,
+		   enum color_attr color,
+		   const char *key,
+		   const char *fmt,
+		   const struct timeval *tv)
+{
+	double usecs = tv->tv_usec;
+	double secs = tv->tv_sec;
+	double time = secs + usecs / 1000000;
+
+	return print_color_float(type, color, key, fmt, time);
+}
+#pragma GCC diagnostic pop
+
 /* Print line separator (if not in JSON mode) */
 void print_nl(void)
 {
 	if (!_jw)
 		printf("%s", _SL_);
+}
+
+int print_color_rate(bool use_iec, enum output_type type, enum color_attr color,
+		     const char *key, const char *fmt, unsigned long long rate)
+{
+	unsigned long kilo = use_iec ? 1024 : 1000;
+	const char *str = use_iec ? "i" : "";
+	static char *units[5] = {"", "K", "M", "G", "T"};
+	char *buf;
+	int rc;
+	int i;
+
+	if (_IS_JSON_CONTEXT(type))
+		return print_color_lluint(type, color, key, "%llu", rate);
+
+	rate <<= 3; /* bytes/sec -> bits/sec */
+
+	for (i = 0; i < ARRAY_SIZE(units) - 1; i++)  {
+		if (rate < kilo)
+			break;
+		if (((rate % kilo) != 0) && rate < 1000*kilo)
+			break;
+		rate /= kilo;
+	}
+
+	rc = asprintf(&buf, "%.0f%s%sbit", (double)rate, units[i],
+		      i > 0 ? str : "");
+	if (rc < 0)
+		return -1;
+
+	rc = print_color_string(type, color, key, fmt, buf);
+	free(buf);
+	return rc;
 }

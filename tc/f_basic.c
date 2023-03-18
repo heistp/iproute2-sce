@@ -70,14 +70,14 @@ static int basic_parse_opt(struct filter_util *qu, char *handle,
 			continue;
 		} else if (matches(*argv, "classid") == 0 ||
 			   strcmp(*argv, "flowid") == 0) {
-			unsigned int handle;
+			unsigned int classid;
 
 			NEXT_ARG();
-			if (get_tc_classid(&handle, *argv)) {
+			if (get_tc_classid(&classid, *argv)) {
 				fprintf(stderr, "Illegal \"classid\"\n");
 				return -1;
 			}
-			addattr_l(n, MAX_MSG, TCA_BASIC_CLASSID, &handle, 4);
+			addattr_l(n, MAX_MSG, TCA_BASIC_CLASSID, &classid, 4);
 		} else if (matches(*argv, "action") == 0) {
 			NEXT_ARG();
 			if (parse_action(&argc, &argv, TCA_BASIC_ACT, n)) {
@@ -119,19 +119,22 @@ static int basic_print_opt(struct filter_util *qu, FILE *f,
 	parse_rtattr_nested(tb, TCA_BASIC_MAX, opt);
 
 	if (handle)
-		fprintf(f, "handle 0x%x ", handle);
+		print_hex(PRINT_ANY, "handle",
+			  "handle 0x%x ", handle);
 
 	if (tb[TCA_BASIC_CLASSID]) {
+		uint32_t classid = rta_getattr_u32(tb[TCA_BASIC_CLASSID]);
 		SPRINT_BUF(b1);
-		fprintf(f, "flowid %s ",
-			sprint_tc_classid(rta_getattr_u32(tb[TCA_BASIC_CLASSID]), b1));
+
+		print_string(PRINT_ANY, "flowid", "flowid %s ",
+			     sprint_tc_classid(classid, b1));
 	}
 
 	if (tb[TCA_BASIC_EMATCHES])
 		print_ematch(f, tb[TCA_BASIC_EMATCHES]);
 
 	if (tb[TCA_BASIC_POLICE]) {
-		fprintf(f, "\n");
+		print_nl();
 		tc_print_police(f, tb[TCA_BASIC_POLICE]);
 	}
 

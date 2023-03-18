@@ -41,7 +41,7 @@ static void explain(void)
 		"\t\tATC:= at <atval> offmask <maskval> shift <shiftval>\n"
 		"\t\tNOTE: offval is byte offset, must be multiple of 4\n"
 		"\t\tNOTE: maskval is a 32 bit hex number\n \t\tNOTE: shiftval is a shift value\n"
-		"\t\tCMD:= clear | invert | set <setval>| add <addval> | retain\n"
+		"\t\tCMD:= clear | invert | set <setval> | add <addval> | decrement | retain\n"
 		"\t<LAYERED>:= ip <ipdata> | ip6 <ip6data>\n"
 		" \t\t| udp <udpdata> | tcp <tcpdata> | icmp <icmpdata>\n"
 		"\tCONTROL:= reclassify | pipe | drop | continue | pass |\n"
@@ -330,7 +330,7 @@ static int parse_val(int *argc_p, char ***argv_p, __u32 *val, int type)
 }
 
 int parse_cmd(int *argc_p, char ***argv_p, __u32 len, int type, __u32 retain,
-	      struct m_pedit_sel *sel, struct m_pedit_key *tkey)
+	      struct m_pedit_sel *sel, struct m_pedit_key *tkey, int flags)
 {
 	__u32 mask[4] = { 0 };
 	__u32 val[4] = { 0 };
@@ -360,15 +360,24 @@ int parse_cmd(int *argc_p, char ***argv_p, __u32 len, int type, __u32 retain,
 		if (matches(*argv, "add") == 0)
 			tkey->cmd = TCA_PEDIT_KEY_EX_CMD_ADD;
 
-		if (!sel->extended && tkey->cmd) {
-			fprintf(stderr,
-				"Non extended mode. only 'set' command is supported\n");
-			return -1;
-		}
+		if (!sel->extended && tkey->cmd)
+			goto non_ext_only_set_cmd;
 
 		NEXT_ARG();
 		if (parse_val(&argc, &argv, val, type))
 			return -1;
+	} else if (matches(*argv, "decrement") == 0) {
+		if ((flags & PEDIT_ALLOW_DEC) == 0) {
+			fprintf(stderr,
+				"decrement command is not supported for this field\n");
+			return -1;
+		}
+
+		if (!sel->extended)
+			goto non_ext_only_set_cmd;
+
+		tkey->cmd = TCA_PEDIT_KEY_EX_CMD_ADD;
+		*v = retain; /* decrement by overflow */
 	} else if (matches(*argv, "preserve") == 0) {
 		retain = 0;
 	} else {
@@ -431,6 +440,10 @@ done:
 	*argv_p = argv;
 	return res;
 
+non_ext_only_set_cmd:
+	fprintf(stderr,
+		"Non extended mode. only 'set' command is supported\n");
+	return -1;
 }
 
 static int parse_offset(int *argc_p, char ***argv_p, struct m_pedit_sel *sel,
@@ -502,7 +515,7 @@ done:
 		NEXT_ARG();
 	}
 
-	res = parse_cmd(&argc, &argv, len, TU32, retain, sel, tkey);
+	res = parse_cmd(&argc, &argv, len, TU32, retain, sel, tkey, 0);
 
 	*argc_p = argc;
 	*argv_p = argv;
@@ -745,8 +758,9 @@ static int print_pedit(struct action_util *au, FILE *f, struct rtattr *arg)
 	struct m_pedit_key_ex *keys_ex = NULL;
 	int err;
 
+	print_string(PRINT_ANY, "kind", " %s ", "pedit");
 	if (arg == NULL)
-		return -1;
+		return 0;
 
 	parse_rtattr_nested(tb, TCA_PEDIT_MAX, arg);
 
@@ -783,7 +797,6 @@ static int print_pedit(struct action_util *au, FILE *f, struct rtattr *arg)
 		}
 	}
 
-	print_string(PRINT_ANY, "kind", " %s ", "pedit");
 	print_action_control(f, "action ", sel->action, " ");
 	print_uint(PRINT_ANY, "nkeys", "keys %d\n", sel->nkeys);
 	print_uint(PRINT_ANY, "index", " \t index %u", sel->index);

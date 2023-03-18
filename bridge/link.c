@@ -19,7 +19,7 @@
 
 static unsigned int filter_index;
 
-static const char *port_states[] = {
+static const char *stp_states[] = {
 	[BR_STATE_DISABLED] = "disabled",
 	[BR_STATE_LISTENING] = "listening",
 	[BR_STATE_LEARNING] = "learning",
@@ -68,22 +68,29 @@ static void print_link_flags(FILE *fp, unsigned int flags, unsigned int mdown)
 	close_json_array(PRINT_ANY, "> ");
 }
 
-static void print_portstate(__u8 state)
+void print_stp_state(__u8 state)
 {
 	if (state <= BR_STATE_BLOCKING)
 		print_string(PRINT_ANY, "state",
-			     "state %s ", port_states[state]);
+			     "state %s ", stp_states[state]);
 	else
 		print_uint(PRINT_ANY, "state",
 			     "state (%d) ", state);
 }
 
-static void print_onoff(FILE *fp, const char *flag, __u8 val)
+int parse_stp_state(const char *arg)
 {
-	if (is_json_context())
-		print_bool(PRINT_JSON, flag, NULL, val);
-	else
-		fprintf(fp, "%s %s ", flag, val ? "on" : "off");
+	size_t nstates = ARRAY_SIZE(stp_states);
+	int state;
+
+	for (state = 0; state < nstates; state++)
+		if (strcmp(stp_states[state], arg) == 0)
+			break;
+
+	if (state == nstates)
+		state = -1;
+
+	return state;
 }
 
 static void print_hwmode(__u16 mode)
@@ -104,7 +111,7 @@ static void print_protinfo(FILE *fp, struct rtattr *attr)
 		parse_rtattr_nested(prtb, IFLA_BRPORT_MAX, attr);
 
 		if (prtb[IFLA_BRPORT_STATE])
-			print_portstate(rta_getattr_u8(prtb[IFLA_BRPORT_STATE]));
+			print_stp_state(rta_getattr_u8(prtb[IFLA_BRPORT_STATE]));
 
 		if (prtb[IFLA_BRPORT_PRIORITY])
 			print_uint(PRINT_ANY, "priority",
@@ -123,38 +130,44 @@ static void print_protinfo(FILE *fp, struct rtattr *attr)
 			fprintf(fp, "%s    ", _SL_);
 
 		if (prtb[IFLA_BRPORT_MODE])
-			print_onoff(fp, "hairpin",
-				    rta_getattr_u8(prtb[IFLA_BRPORT_MODE]));
+			print_on_off(PRINT_ANY, "hairpin", "hairpin %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_MODE]));
 		if (prtb[IFLA_BRPORT_GUARD])
-			print_onoff(fp, "guard",
-				    rta_getattr_u8(prtb[IFLA_BRPORT_GUARD]));
+			print_on_off(PRINT_ANY, "guard", "guard %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_GUARD]));
 		if (prtb[IFLA_BRPORT_PROTECT])
-			print_onoff(fp, "root_block",
-				    rta_getattr_u8(prtb[IFLA_BRPORT_PROTECT]));
+			print_on_off(PRINT_ANY, "root_block", "root_block %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_PROTECT]));
 		if (prtb[IFLA_BRPORT_FAST_LEAVE])
-			print_onoff(fp, "fastleave",
-				    rta_getattr_u8(prtb[IFLA_BRPORT_FAST_LEAVE]));
+			print_on_off(PRINT_ANY, "fastleave", "fastleave %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_FAST_LEAVE]));
 		if (prtb[IFLA_BRPORT_LEARNING])
-			print_onoff(fp, "learning",
-				    rta_getattr_u8(prtb[IFLA_BRPORT_LEARNING]));
+			print_on_off(PRINT_ANY, "learning", "learning %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_LEARNING]));
 		if (prtb[IFLA_BRPORT_LEARNING_SYNC])
-			print_onoff(fp, "learning_sync",
-				    rta_getattr_u8(prtb[IFLA_BRPORT_LEARNING_SYNC]));
+			print_on_off(PRINT_ANY, "learning_sync", "learning_sync %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_LEARNING_SYNC]));
 		if (prtb[IFLA_BRPORT_UNICAST_FLOOD])
-			print_onoff(fp, "flood",
-				    rta_getattr_u8(prtb[IFLA_BRPORT_UNICAST_FLOOD]));
+			print_on_off(PRINT_ANY, "flood", "flood %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_UNICAST_FLOOD]));
 		if (prtb[IFLA_BRPORT_MCAST_FLOOD])
-			print_onoff(fp, "mcast_flood",
-				    rta_getattr_u8(prtb[IFLA_BRPORT_MCAST_FLOOD]));
+			print_on_off(PRINT_ANY, "mcast_flood", "mcast_flood %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_MCAST_FLOOD]));
+		if (prtb[IFLA_BRPORT_BCAST_FLOOD])
+			print_on_off(PRINT_ANY, "bcast_flood", "bcast_flood %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_BCAST_FLOOD]));
+		if (prtb[IFLA_BRPORT_MULTICAST_ROUTER])
+			print_uint(PRINT_ANY, "mcast_router", "mcast_router %u ",
+				   rta_getattr_u8(prtb[IFLA_BRPORT_MULTICAST_ROUTER]));
 		if (prtb[IFLA_BRPORT_MCAST_TO_UCAST])
-			print_onoff(fp, "mcast_to_unicast",
-				    rta_getattr_u8(prtb[IFLA_BRPORT_MCAST_TO_UCAST]));
+			print_on_off(PRINT_ANY, "mcast_to_unicast", "mcast_to_unicast %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_MCAST_TO_UCAST]));
 		if (prtb[IFLA_BRPORT_NEIGH_SUPPRESS])
-			print_onoff(fp, "neigh_suppress",
-				    rta_getattr_u8(prtb[IFLA_BRPORT_NEIGH_SUPPRESS]));
+			print_on_off(PRINT_ANY, "neigh_suppress", "neigh_suppress %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_NEIGH_SUPPRESS]));
 		if (prtb[IFLA_BRPORT_VLAN_TUNNEL])
-			print_onoff(fp, "vlan_tunnel",
-				    rta_getattr_u8(prtb[IFLA_BRPORT_VLAN_TUNNEL]));
+			print_on_off(PRINT_ANY, "vlan_tunnel", "vlan_tunnel %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_VLAN_TUNNEL]));
 
 		if (prtb[IFLA_BRPORT_BACKUP_PORT]) {
 			int ifidx;
@@ -166,10 +179,13 @@ static void print_protinfo(FILE *fp, struct rtattr *attr)
 		}
 
 		if (prtb[IFLA_BRPORT_ISOLATED])
-			print_onoff(fp, "isolated",
-				    rta_getattr_u8(prtb[IFLA_BRPORT_ISOLATED]));
+			print_on_off(PRINT_ANY, "isolated", "isolated %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_ISOLATED]));
+		if (prtb[IFLA_BRPORT_LOCKED])
+			print_on_off(PRINT_ANY, "locked", "locked %s ",
+				     rta_getattr_u8(prtb[IFLA_BRPORT_LOCKED]));
 	} else
-		print_portstate(rta_getattr_u8(attr));
+		print_stp_state(rta_getattr_u8(attr));
 }
 
 
@@ -185,12 +201,6 @@ static void print_af_spec(struct rtattr *attr, int ifindex)
 
 	if (aftb[IFLA_BRIDGE_MODE])
 		print_hwmode(rta_getattr_u16(aftb[IFLA_BRIDGE_MODE]));
-
-	if (!show_details)
-		return;
-
-	if (aftb[IFLA_BRIDGE_VLAN_INFO])
-		print_vlan_info(aftb[IFLA_BRIDGE_VLAN_INFO], ifindex);
 }
 
 int print_linkinfo(struct nlmsghdr *n, void *arg)
@@ -219,6 +229,8 @@ int print_linkinfo(struct nlmsghdr *n, void *arg)
 	name = get_ifname_rta(ifi->ifi_index, tb[IFLA_IFNAME]);
 	if (!name)
 		return -1;
+
+	print_headers(fp, "[LINK]");
 
 	open_json_object(NULL);
 	if (n->nlmsg_type == RTM_DELLINK)
@@ -263,32 +275,19 @@ static void usage(void)
 		"                               [ learning {on | off} ]\n"
 		"                               [ learning_sync {on | off} ]\n"
 		"                               [ flood {on | off} ]\n"
+		"                               [ mcast_router MULTICAST_ROUTER ]\n"
 		"                               [ mcast_flood {on | off} ]\n"
+		"                               [ bcast_flood {on | off} ]\n"
 		"                               [ mcast_to_unicast {on | off} ]\n"
 		"                               [ neigh_suppress {on | off} ]\n"
 		"                               [ vlan_tunnel {on | off} ]\n"
 		"                               [ isolated {on | off} ]\n"
+		"                               [ locked {on | off} ]\n"
 		"                               [ hwmode {vepa | veb} ]\n"
 		"                               [ backup_port DEVICE ] [ nobackup_port ]\n"
 		"                               [ self ] [ master ]\n"
 		"       bridge link show [dev DEV]\n");
 	exit(-1);
-}
-
-static bool on_off(char *arg, __s8 *attr, char *val)
-{
-	if (strcmp(val, "on") == 0)
-		*attr = 1;
-	else if (strcmp(val, "off") == 0)
-		*attr = 0;
-	else {
-		fprintf(stderr,
-			"Error: argument of \"%s\" must be \"on\" or \"off\"\n",
-			arg);
-		return false;
-	}
-
-	return true;
 }
 
 static int brlink_modify(int argc, char **argv)
@@ -310,8 +309,11 @@ static int brlink_modify(int argc, char **argv)
 	__s8 learning_sync = -1;
 	__s8 flood = -1;
 	__s8 vlan_tunnel = -1;
+	__s8 mcast_router = -1;
 	__s8 mcast_flood = -1;
+	__s8 bcast_flood = -1;
 	__s8 mcast_to_unicast = -1;
+	__s8 locked = -1;
 	__s8 isolated = -1;
 	__s8 hairpin = -1;
 	__s8 bpdu_guard = -1;
@@ -323,6 +325,7 @@ static int brlink_modify(int argc, char **argv)
 	__s16 mode = -1;
 	__u16 flags = 0;
 	struct rtattr *nest;
+	int ret;
 
 	while (argc > 0) {
 		if (strcmp(*argv, "dev") == 0) {
@@ -330,40 +333,57 @@ static int brlink_modify(int argc, char **argv)
 			d = *argv;
 		} else if (strcmp(*argv, "guard") == 0) {
 			NEXT_ARG();
-			if (!on_off("guard", &bpdu_guard, *argv))
-				return -1;
+			bpdu_guard = parse_on_off("guard", *argv, &ret);
+			if (ret)
+				return ret;
 		} else if (strcmp(*argv, "hairpin") == 0) {
 			NEXT_ARG();
-			if (!on_off("hairpin", &hairpin, *argv))
-				return -1;
+			hairpin = parse_on_off("hairpin", *argv, &ret);
+			if (ret)
+				return ret;
 		} else if (strcmp(*argv, "fastleave") == 0) {
 			NEXT_ARG();
-			if (!on_off("fastleave", &fast_leave, *argv))
-				return -1;
+			fast_leave = parse_on_off("fastleave", *argv, &ret);
+			if (ret)
+				return ret;
 		} else if (strcmp(*argv, "root_block") == 0) {
 			NEXT_ARG();
-			if (!on_off("root_block", &root_block, *argv))
-				return -1;
+			root_block = parse_on_off("root_block", *argv, &ret);
+			if (ret)
+				return ret;
 		} else if (strcmp(*argv, "learning") == 0) {
 			NEXT_ARG();
-			if (!on_off("learning", &learning, *argv))
-				return -1;
+			learning = parse_on_off("learning", *argv, &ret);
+			if (ret)
+				return ret;
 		} else if (strcmp(*argv, "learning_sync") == 0) {
 			NEXT_ARG();
-			if (!on_off("learning_sync", &learning_sync, *argv))
-				return -1;
+			learning_sync = parse_on_off("learning_sync", *argv, &ret);
+			if (ret)
+				return ret;
 		} else if (strcmp(*argv, "flood") == 0) {
 			NEXT_ARG();
-			if (!on_off("flood", &flood, *argv))
-				return -1;
+			flood = parse_on_off("flood", *argv, &ret);
+			if (ret)
+				return ret;
+		} else if (strcmp(*argv, "mcast_router") == 0) {
+			NEXT_ARG();
+			mcast_router = atoi(*argv);
 		} else if (strcmp(*argv, "mcast_flood") == 0) {
 			NEXT_ARG();
-			if (!on_off("mcast_flood", &mcast_flood, *argv))
-				return -1;
+			mcast_flood = parse_on_off("mcast_flood", *argv, &ret);
+			if (ret)
+				return ret;
+		} else if (strcmp(*argv, "bcast_flood") == 0) {
+			NEXT_ARG();
+			bcast_flood = parse_on_off("bcast_flood", *argv, &ret);
+			if (ret)
+				return ret;
 		} else if (strcmp(*argv, "mcast_to_unicast") == 0) {
 			NEXT_ARG();
-			if (!on_off("mcast_to_unicast", &mcast_to_unicast, *argv))
-				return -1;
+			mcast_to_unicast = parse_on_off("mcast_to_unicast", *argv, &ret);
+			if (ret)
+				return ret;
 		} else if (strcmp(*argv, "cost") == 0) {
 			NEXT_ARG();
 			cost = atoi(*argv);
@@ -373,14 +393,11 @@ static int brlink_modify(int argc, char **argv)
 		} else if (strcmp(*argv, "state") == 0) {
 			NEXT_ARG();
 			char *endptr;
-			size_t nstates = ARRAY_SIZE(port_states);
 
 			state = strtol(*argv, &endptr, 10);
 			if (!(**argv != '\0' && *endptr == '\0')) {
-				for (state = 0; state < nstates; state++)
-					if (strcasecmp(port_states[state], *argv) == 0)
-						break;
-				if (state == nstates) {
+				state = parse_stp_state(*argv);
+				if (state == -1) {
 					fprintf(stderr,
 						"Error: invalid STP port state\n");
 					return -1;
@@ -404,18 +421,24 @@ static int brlink_modify(int argc, char **argv)
 			flags |= BRIDGE_FLAGS_MASTER;
 		} else if (strcmp(*argv, "neigh_suppress") == 0) {
 			NEXT_ARG();
-			if (!on_off("neigh_suppress", &neigh_suppress,
-				    *argv))
-				return -1;
+			neigh_suppress = parse_on_off("neigh_suppress", *argv, &ret);
+			if (ret)
+				return ret;
 		} else if (strcmp(*argv, "vlan_tunnel") == 0) {
 			NEXT_ARG();
-			if (!on_off("vlan_tunnel", &vlan_tunnel,
-				    *argv))
-				return -1;
+			vlan_tunnel = parse_on_off("vlan_tunnel", *argv, &ret);
+			if (ret)
+				return ret;
 		} else if (strcmp(*argv, "isolated") == 0) {
 			NEXT_ARG();
-			if (!on_off("isolated", &isolated, *argv))
-				return -1;
+			isolated = parse_on_off("isolated", *argv, &ret);
+			if (ret)
+				return ret;
+		} else if (strcmp(*argv, "locked") == 0) {
+			NEXT_ARG();
+			locked = parse_on_off("locked", *argv, &ret);
+			if (ret)
+				return ret;
 		} else if (strcmp(*argv, "backup_port") == 0) {
 			NEXT_ARG();
 			backup_port_idx = ll_name_to_index(*argv);
@@ -460,9 +483,15 @@ static int brlink_modify(int argc, char **argv)
 		addattr8(&req.n, sizeof(req), IFLA_BRPORT_PROTECT, root_block);
 	if (flood >= 0)
 		addattr8(&req.n, sizeof(req), IFLA_BRPORT_UNICAST_FLOOD, flood);
+	if (mcast_router >= 0)
+		addattr8(&req.n, sizeof(req), IFLA_BRPORT_MULTICAST_ROUTER,
+			 mcast_router);
 	if (mcast_flood >= 0)
 		addattr8(&req.n, sizeof(req), IFLA_BRPORT_MCAST_FLOOD,
 			 mcast_flood);
+	if (bcast_flood >= 0)
+		addattr8(&req.n, sizeof(req), IFLA_BRPORT_BCAST_FLOOD,
+			 bcast_flood);
 	if (mcast_to_unicast >= 0)
 		addattr8(&req.n, sizeof(req), IFLA_BRPORT_MCAST_TO_UCAST,
 			 mcast_to_unicast);
@@ -489,6 +518,9 @@ static int brlink_modify(int argc, char **argv)
 			 vlan_tunnel);
 	if (isolated != -1)
 		addattr8(&req.n, sizeof(req), IFLA_BRPORT_ISOLATED, isolated);
+
+	if (locked >= 0)
+		addattr8(&req.n, sizeof(req), IFLA_BRPORT_LOCKED, locked);
 
 	if (backup_port_idx != -1)
 		addattr32(&req.n, sizeof(req), IFLA_BRPORT_BACKUP_PORT,
@@ -539,19 +571,9 @@ static int brlink_show(int argc, char **argv)
 			return nodev(filter_dev);
 	}
 
-	if (show_details) {
-		if (rtnl_linkdump_req_filter(&rth, PF_BRIDGE,
-					     (compress_vlans ?
-					      RTEXT_FILTER_BRVLAN_COMPRESSED :
-					      RTEXT_FILTER_BRVLAN)) < 0) {
-			perror("Cannon send dump request");
-			exit(1);
-		}
-	} else {
-		if (rtnl_linkdump_req(&rth, PF_BRIDGE) < 0) {
-			perror("Cannon send dump request");
-			exit(1);
-		}
+	if (rtnl_linkdump_req(&rth, PF_BRIDGE) < 0) {
+		perror("Cannot send dump request");
+		exit(1);
 	}
 
 	new_json_obj(json);
@@ -568,6 +590,8 @@ static int brlink_show(int argc, char **argv)
 int do_link(int argc, char **argv)
 {
 	ll_init_map(&rth);
+	timestamp = 0;
+
 	if (argc > 0) {
 		if (matches(*argv, "set") == 0 ||
 		    matches(*argv, "change") == 0)

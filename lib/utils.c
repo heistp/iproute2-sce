@@ -540,7 +540,7 @@ static int __get_addr_1(inet_prefix *addr, const char *name, int family)
 	memset(addr, 0, sizeof(*addr));
 
 	if (strcmp(name, "default") == 0) {
-		if ((family == AF_DECnet) || (family == AF_MPLS))
+		if (family == AF_MPLS)
 			return -1;
 		addr->family = family;
 		addr->bytelen = af_byte_len(addr->family);
@@ -551,7 +551,7 @@ static int __get_addr_1(inet_prefix *addr, const char *name, int family)
 
 	if (strcmp(name, "all") == 0 ||
 	    strcmp(name, "any") == 0) {
-		if ((family == AF_DECnet) || (family == AF_MPLS))
+		if (family == AF_MPLS)
 			return -1;
 		addr->family = family;
 		addr->bytelen = 0;
@@ -636,10 +636,6 @@ int af_bit_len(int af)
 		return 128;
 	case AF_INET:
 		return 32;
-	case AF_DECnet:
-		return 16;
-	case AF_IPX:
-		return 80;
 	case AF_MPLS:
 		return 20;
 	}
@@ -728,16 +724,6 @@ int get_addr_rta(inet_prefix *dst, const struct rtattr *rta, int family)
 		dst->family = AF_INET6;
 		dst->bytelen = 16;
 		memcpy(dst->data, data, 16);
-		break;
-	case 2:
-		dst->family = AF_DECnet;
-		dst->bytelen = 2;
-		memcpy(dst->data, data, 2);
-		break;
-	case 10:
-		dst->family = AF_IPX;
-		dst->bytelen = 10;
-		memcpy(dst->data, data, 10);
 		break;
 	default:
 		return -1;
@@ -1029,8 +1015,6 @@ int read_family(const char *name)
 		family = AF_INET6;
 	else if (strcmp(name, "link") == 0)
 		family = AF_PACKET;
-	else if (strcmp(name, "ipx") == 0)
-		family = AF_IPX;
 	else if (strcmp(name, "mpls") == 0)
 		family = AF_MPLS;
 	else if (strcmp(name, "bridge") == 0)
@@ -1046,8 +1030,6 @@ const char *family_name(int family)
 		return "inet6";
 	if (family == AF_PACKET)
 		return "link";
-	if (family == AF_IPX)
-		return "ipx";
 	if (family == AF_MPLS)
 		return "mpls";
 	if (family == AF_BRIDGE)
@@ -1694,4 +1676,286 @@ char *sprint_time64(__s64 time, char *buf)
 {
 	print_time64(buf, SPRINT_BSIZE-1, time);
 	return buf;
+}
+
+int do_batch(const char *name, bool force,
+	     int (*cmd)(int argc, char *argv[], void *data), void *data)
+{
+	char *line = NULL;
+	size_t len = 0;
+	int ret = EXIT_SUCCESS;
+
+	if (name && strcmp(name, "-") != 0) {
+		if (freopen(name, "r", stdin) == NULL) {
+			fprintf(stderr,
+				"Cannot open file \"%s\" for reading: %s\n",
+				name, strerror(errno));
+			return EXIT_FAILURE;
+		}
+	}
+
+	cmdlineno = 0;
+	while (getcmdline(&line, &len, stdin) != -1) {
+		char *largv[MAX_ARGS];
+		int largc;
+
+		largc = makeargs(line, largv, MAX_ARGS);
+		if (!largc)
+			continue;	/* blank line */
+
+		if (cmd(largc, largv, data)) {
+			fprintf(stderr, "Command failed %s:%d\n",
+				name, cmdlineno);
+			ret = EXIT_FAILURE;
+			if (!force)
+				break;
+		}
+	}
+
+	if (line)
+		free(line);
+
+	return ret;
+}
+
+int parse_one_of(const char *msg, const char *realval, const char * const *list,
+		 size_t len, int *p_err)
+{
+	int i;
+
+	for (i = 0; i < len; i++) {
+		if (list[i] && matches(realval, list[i]) == 0) {
+			*p_err = 0;
+			return i;
+		}
+	}
+
+	fprintf(stderr, "Error: argument of \"%s\" must be one of ", msg);
+	for (i = 0; i < len; i++)
+		if (list[i])
+			fprintf(stderr, "\"%s\", ", list[i]);
+	fprintf(stderr, "not \"%s\"\n", realval);
+	*p_err = -EINVAL;
+	return 0;
+}
+
+bool parse_on_off(const char *msg, const char *realval, int *p_err)
+{
+	static const char * const values_on_off[] = { "off", "on" };
+
+	return parse_one_of(msg, realval, values_on_off, ARRAY_SIZE(values_on_off), p_err);
+}
+
+int parse_mapping_gen(int *argcp, char ***argvp,
+		      int (*key_cb)(__u32 *keyp, const char *key),
+		      int (*mapping_cb)(__u32 key, char *value, void *data),
+		      void *mapping_cb_data)
+{
+	int argc = *argcp;
+	char **argv = *argvp;
+	int ret = 0;
+
+	while (argc > 0) {
+		char *colon = strchr(*argv, ':');
+		__u32 key;
+
+		if (!colon)
+			break;
+		*colon = '\0';
+
+		if (key_cb(&key, *argv)) {
+			ret = 1;
+			break;
+		}
+		if (mapping_cb(key, colon + 1, mapping_cb_data)) {
+			ret = 1;
+			break;
+		}
+
+		argc--, argv++;
+	}
+
+	*argcp = argc;
+	*argvp = argv;
+	return ret;
+}
+
+static int parse_mapping_num(__u32 *keyp, const char *key)
+{
+	return get_u32(keyp, key, 0);
+}
+
+int parse_mapping_num_all(__u32 *keyp, const char *key)
+{
+	if (matches(key, "all") == 0) {
+		*keyp = (__u32) -1;
+		return 0;
+	}
+	return parse_mapping_num(keyp, key);
+}
+
+int parse_mapping(int *argcp, char ***argvp, bool allow_all,
+		  int (*mapping_cb)(__u32 key, char *value, void *data),
+		  void *mapping_cb_data)
+{
+	if (allow_all)
+		return parse_mapping_gen(argcp, argvp, parse_mapping_num_all,
+					 mapping_cb, mapping_cb_data);
+	else
+		return parse_mapping_gen(argcp, argvp, parse_mapping_num,
+					 mapping_cb, mapping_cb_data);
+}
+
+int str_map_lookup_str(const struct str_num_map *map, const char *needle)
+{
+	if (!needle)
+		return -EINVAL;
+
+	/* Process array which is NULL terminated by the string. */
+	while (map && map->str) {
+		if (strcmp(map->str, needle) == 0)
+			return map->num;
+
+		map++;
+	}
+	return -EINVAL;
+}
+
+const char *str_map_lookup_uint(const struct str_num_map *map, unsigned int val)
+{
+	unsigned int num = val;
+
+	while (map && map->str) {
+		if (num == map->num)
+			return map->str;
+
+		map++;
+	}
+	return NULL;
+}
+
+const char *str_map_lookup_u16(const struct str_num_map *map, uint16_t val)
+{
+	unsigned int num = val;
+
+	while (map && map->str) {
+		if (num == map->num)
+			return map->str;
+
+		map++;
+	}
+	return NULL;
+}
+
+const char *str_map_lookup_u8(const struct str_num_map *map, uint8_t val)
+{
+	unsigned int num = val;
+
+	while (map && map->str) {
+		if (num == map->num)
+			return map->str;
+
+		map++;
+	}
+	return NULL;
+}
+
+unsigned int get_str_char_count(const char *str, int match)
+{
+	unsigned int count = 0;
+	const char *pos = str;
+
+	while ((pos = strchr(pos, match))) {
+		count++;
+		pos++;
+	}
+	return count;
+}
+
+int str_split_by_char(char *str, char **before, char **after, int match)
+{
+	char *slash;
+
+	slash = strrchr(str, match);
+	if (!slash)
+		return -EINVAL;
+	*slash = '\0';
+	*before = str;
+	*after = slash + 1;
+	return 0;
+}
+
+struct indent_mem *alloc_indent_mem(void)
+{
+	struct indent_mem *mem = malloc(sizeof(*mem));
+
+	if (!mem)
+		return NULL;
+	strcpy(mem->indent_str, "");
+	mem->indent_level = 0;
+	return mem;
+}
+
+void free_indent_mem(struct indent_mem *mem)
+{
+	free(mem);
+}
+
+#define INDENT_STR_STEP 2
+
+void inc_indent(struct indent_mem *mem)
+{
+	if (mem->indent_level + INDENT_STR_STEP > INDENT_STR_MAXLEN)
+		return;
+	mem->indent_level += INDENT_STR_STEP;
+	memset(mem->indent_str, ' ', sizeof(mem->indent_str));
+	mem->indent_str[mem->indent_level] = '\0';
+}
+
+void dec_indent(struct indent_mem *mem)
+{
+	if (mem->indent_level - INDENT_STR_STEP < 0)
+		return;
+	mem->indent_level -= INDENT_STR_STEP;
+	mem->indent_str[mem->indent_level] = '\0';
+}
+
+void print_indent(struct indent_mem *mem)
+{
+	if (mem->indent_level)
+		printf("%s", mem->indent_str);
+}
+
+const char *proto_n2a(unsigned short id, char *buf, int len,
+		      const struct proto *proto_tb, size_t tb_len)
+{
+	int i;
+
+	id = ntohs(id);
+
+	for (i = 0; !numeric && i < tb_len; i++) {
+		if (proto_tb[i].id == id)
+			return proto_tb[i].name;
+	}
+
+	snprintf(buf, len, "[%d]", id);
+
+	return buf;
+}
+
+int proto_a2n(unsigned short *id, const char *buf,
+	      const struct proto *proto_tb, size_t tb_len)
+{
+	int i;
+
+	for (i = 0; i < tb_len; i++) {
+		if (strcasecmp(proto_tb[i].name, buf) == 0) {
+			*id = htons(proto_tb[i].id);
+			return 0;
+		}
+	}
+	if (get_be16(id, buf, 0))
+		return -1;
+
+	return 0;
 }

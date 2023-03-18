@@ -63,7 +63,7 @@ static void usage(void)
 		"        [ coa ADDR[/PLEN] ] [ ctx CTX ] [ extra-flag EXTRA-FLAG-LIST ]\n"
 		"        [ offload [dev DEV] dir DIR ]\n"
 		"        [ output-mark OUTPUT-MARK [ mask MASK ] ]\n"
-		"        [ if_id IF_ID ]\n"
+		"        [ if_id IF_ID ] [ tfcpad LENGTH ]\n"
 		"Usage: ip xfrm state allocspi ID [ mode MODE ] [ mark MARK [ mask MASK ] ]\n"
 		"        [ reqid REQID ] [ seq SEQ ] [ min SPI max SPI ]\n"
 		"Usage: ip xfrm state { delete | get } ID [ mark MARK [ mask MASK ] ]\n"
@@ -123,11 +123,6 @@ static int xfrm_algo_parse(struct xfrm_algo *alg, enum xfrm_attr_type_t type,
 {
 	int len;
 	int slen = strlen(key);
-
-#if 0
-	/* XXX: verifying both name and key is required! */
-	fprintf(stderr, "warning: ALGO-NAME/ALGO-KEYMAT values will be sent to the kernel promiscuously! (verifying them isn't implemented yet)\n");
-#endif
 
 	strlcpy(alg->alg_name, name, sizeof(alg->alg_name));
 
@@ -331,6 +326,7 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 	struct xfrm_mark output_mark = {0, 0};
 	bool is_if_id_set = false;
 	__u32 if_id = 0;
+	__u32 tfcpad = 0;
 
 	while (argc > 0) {
 		if (strcmp(*argv, "mode") == 0) {
@@ -465,6 +461,10 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 			if (get_u32(&if_id, *argv, 0))
 				invarg("value after \"if_id\" is invalid", *argv);
 			is_if_id_set = true;
+		} else if (strcmp(*argv, "tfcpad") == 0) {
+			NEXT_ARG();
+			if (get_u32(&tfcpad, *argv, 0))
+				invarg("value after \"tfcpad\" is invalid", *argv);
 		} else {
 			/* try to assume ALGO */
 			int type = xfrm_algotype_getbyname(*argv);
@@ -650,6 +650,9 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 	if (is_if_id_set)
 		addattr32(&req.n, sizeof(req.buf), XFRMA_IF_ID, if_id);
 
+	if (tfcpad)
+		addattr32(&req.n, sizeof(req.buf), XFRMA_TFCPAD, tfcpad);
+
 	if (xfrm_xfrmproto_is_ipsec(req.xsinfo.id.proto)) {
 		switch (req.xsinfo.mode) {
 		case XFRM_MODE_TRANSPORT:
@@ -783,12 +786,6 @@ static int xfrm_state_allocspi(int argc, char **argv)
 		.n.nlmsg_flags = NLM_F_REQUEST,
 		.n.nlmsg_type = XFRM_MSG_ALLOCSPI,
 		.xspi.info.family = preferred_family,
-#if 0
-		.xspi.lft.soft_byte_limit = XFRM_INF,
-		.xspi.lft.hard_byte_limit = XFRM_INF,
-		.xspi.lft.soft_packet_limit = XFRM_INF,
-		.xspi.lft.hard_packet_limit = XFRM_INF,
-#endif
 	};
 	char *idp = NULL;
 	char *minp = NULL;

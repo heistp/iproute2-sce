@@ -47,6 +47,13 @@ bool rd_no_arg(struct rd *rd)
 	return rd_argc(rd) == 0;
 }
 
+bool rd_is_multiarg(struct rd *rd)
+{
+	if (!rd_argc(rd))
+		return false;
+	return strpbrk(rd_argv(rd), ",-") != NULL;
+}
+
 /*
  * Possible input:output
  * dev/port    | first port | is_dump_all
@@ -428,6 +435,14 @@ static const enum mnl_attr_data_type nldev_policy[RDMA_NLDEV_ATTR_MAX] = {
 	[RDMA_NLDEV_ATTR_RES_LKEY] = MNL_TYPE_U32,
 	[RDMA_NLDEV_ATTR_RES_IOVA] = MNL_TYPE_U64,
 	[RDMA_NLDEV_ATTR_RES_MRLEN] = MNL_TYPE_U64,
+	[RDMA_NLDEV_ATTR_RES_CTX] = MNL_TYPE_NESTED,
+	[RDMA_NLDEV_ATTR_RES_CTX_ENTRY] = MNL_TYPE_NESTED,
+	[RDMA_NLDEV_ATTR_RES_CTXN] = MNL_TYPE_U32,
+	[RDMA_NLDEV_ATTR_RES_SRQ] = MNL_TYPE_NESTED,
+	[RDMA_NLDEV_ATTR_RES_SRQ_ENTRY] = MNL_TYPE_NESTED,
+	[RDMA_NLDEV_ATTR_RES_SRQN] = MNL_TYPE_U32,
+	[RDMA_NLDEV_ATTR_MIN_RANGE] = MNL_TYPE_U32,
+	[RDMA_NLDEV_ATTR_MAX_RANGE] = MNL_TYPE_U32,
 	[RDMA_NLDEV_ATTR_NDEV_INDEX]		= MNL_TYPE_U32,
 	[RDMA_NLDEV_ATTR_NDEV_NAME]		= MNL_TYPE_NUL_STRING,
 	[RDMA_NLDEV_ATTR_DRIVER] = MNL_TYPE_NESTED,
@@ -666,16 +681,10 @@ int rd_send_msg(struct rd *rd)
 {
 	int ret;
 
-	rd->nl = mnl_socket_open(NETLINK_RDMA);
+	rd->nl = mnlu_socket_open(NETLINK_RDMA);
 	if (!rd->nl) {
 		pr_err("Failed to open NETLINK_RDMA socket\n");
 		return -ENODEV;
-	}
-
-	ret = mnl_socket_bind(rd->nl, 0, MNL_SOCKET_AUTOPID);
-	if (ret < 0) {
-		pr_err("Failed to bind socket with err %d\n", ret);
-		goto err;
 	}
 
 	ret = mnl_socket_sendto(rd->nl, rd->nlh, rd->nlh->nlmsg_len);
@@ -692,23 +701,13 @@ err:
 
 int rd_recv_msg(struct rd *rd, mnl_cb_t callback, void *data, unsigned int seq)
 {
-	int ret;
-	unsigned int portid;
 	char buf[MNL_SOCKET_BUFFER_SIZE];
+	int ret;
 
-	portid = mnl_socket_get_portid(rd->nl);
-	do {
-		ret = mnl_socket_recvfrom(rd->nl, buf, sizeof(buf));
-		if (ret <= 0)
-			break;
-
-		ret = mnl_cb_run(buf, ret, seq, portid, callback, data);
-	} while (ret > 0);
-
+	ret = mnlu_socket_recv_run(rd->nl, seq, buf, MNL_SOCKET_BUFFER_SIZE,
+				   callback, data);
 	if (ret < 0 && !rd->suppress_errors)
 		perror("error");
-
-	mnl_socket_close(rd->nl);
 	return ret;
 }
 
@@ -779,11 +778,6 @@ static int print_driver_string(struct rd *rd, const char *key_str,
 	print_color_string(PRINT_ANY, COLOR_NONE, key_str, key_str, val_str);
 	print_color_string(PRINT_FP, COLOR_NONE, NULL, " %s ", val_str);
 	return 0;
-}
-
-void print_on_off(struct rd *rd, const char *key_str, bool on)
-{
-	print_driver_string(rd, key_str, (on) ? "on":"off");
 }
 
 static int print_driver_s32(struct rd *rd, const char *key_str, int32_t val,

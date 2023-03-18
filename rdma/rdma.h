@@ -19,6 +19,7 @@
 
 #include "list.h"
 #include "utils.h"
+#include "mnl_utils.h"
 #include "json_print.h"
 
 #define pr_err(args...) fprintf(stderr, ##args)
@@ -84,6 +85,7 @@ struct rd_cmd {
  * Parser interface
  */
 bool rd_no_arg(struct rd *rd);
+bool rd_is_multiarg(struct rd *rd);
 void rd_arg_inc(struct rd *rd);
 
 char *rd_argv(struct rd *rd);
@@ -138,7 +140,6 @@ void print_driver_table(struct rd *rd, struct nlattr *tb);
 void print_raw_data(struct rd *rd, struct nlattr **nla_line);
 void newline(struct rd *rd);
 void newline_indent(struct rd *rd);
-void print_on_off(struct rd *rd, const char *key_str, bool on);
 void print_raw_data(struct rd *rd, struct nlattr **nla_line);
 #define MAX_LINE_LENGTH 80
 
