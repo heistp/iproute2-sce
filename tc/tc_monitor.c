@@ -42,6 +42,9 @@ static int accept_tcmsg(struct rtnl_ctrl_data *ctrl,
 	if (timestamp)
 		print_timestamp(fp);
 
+	if (n->nlmsg_type == NLMSG_DONE)
+		nl_dump_ext_ack_done(n, 0, 0);
+
 	if (n->nlmsg_type == RTM_NEWTFILTER ||
 	    n->nlmsg_type == RTM_DELTFILTER ||
 	    n->nlmsg_type == RTM_NEWCHAIN ||
@@ -64,7 +67,7 @@ static int accept_tcmsg(struct rtnl_ctrl_data *ctrl,
 	}
 	if (n->nlmsg_type != NLMSG_ERROR && n->nlmsg_type != NLMSG_NOOP &&
 	    n->nlmsg_type != NLMSG_DONE) {
-		fprintf(fp, "Unknown message: length %08d type %08x flags %08x\n",
+		fprintf(stderr, "Unknown message: length %08d type %08x flags %08x\n",
 			n->nlmsg_len, n->nlmsg_type, n->nlmsg_flags);
 	}
 	return 0;

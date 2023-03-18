@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
+#include <stdint.h>
 
 #ifdef HAVE_LIBBSD
 #include <bsd/string.h>
@@ -20,7 +21,6 @@
 
 extern int preferred_family;
 extern int human_readable;
-extern int use_iec;
 extern int show_stats;
 extern int show_details;
 extern int show_raw;
@@ -36,6 +36,7 @@ extern int max_flush_loops;
 extern int batch_mode;
 extern int numeric;
 extern bool do_all;
+extern int echo_request;
 
 #ifndef CONFDIR
 #define CONFDIR		"/etc/iproute2"
@@ -50,6 +51,9 @@ void incomplete_command(void) __attribute__((noreturn));
 #define NEXT_ARG_OK() (argc - 1 > 0)
 #define NEXT_ARG_FWD() do { argv++; argc--; } while(0)
 #define PREV_ARG() do { argv--; argc++; } while(0)
+
+/* Upper limit for batch mode */
+#define MAX_ARGS 512
 
 #define TIME_UNITS_PER_SEC	1000000
 #define NSEC_PER_USEC 1000
@@ -106,17 +110,6 @@ static inline bool is_addrtype_inet_not_multi(const inet_prefix *p)
 	return (p->flags & ADDRTYPE_INET_MULTI) == ADDRTYPE_INET;
 }
 
-#define DN_MAXADDL 20
-#ifndef AF_DECnet
-#define AF_DECnet 12
-#endif
-
-struct dn_naddr
-{
-        unsigned short          a_len;
-        unsigned char a_addr[DN_MAXADDL];
-};
-
 #ifndef AF_MPLS
 # define AF_MPLS 28
 #endif
@@ -163,6 +156,9 @@ int get_be64(__be64 *val, const char *arg, int base);
 int get_be32(__be32 *val, const char *arg, int base);
 int get_be16(__be16 *val, const char *arg, int base);
 int get_addr64(__u64 *ap, const char *cp);
+int get_rate(unsigned int *rate, const char *str);
+int get_rate64(__u64 *rate, const char *str);
+int get_size(unsigned int *size, const char *str);
 
 int hex2mem(const char *buf, uint8_t *mem, int count);
 char *hexstring_n2a(const __u8 *str, int len, char *buf, int blen);
@@ -203,8 +199,14 @@ bool matches(const char *prefix, const char *string);
 int inet_addr_match(const inet_prefix *a, const inet_prefix *b, int bits);
 int inet_addr_match_rta(const inet_prefix *m, const struct rtattr *rta);
 
+const char *ax25_ntop(int af, const void *addr, char *str, socklen_t len);
+
+const char *rose_ntop(int af, const void *addr, char *buf, socklen_t buflen);
+
 const char *mpls_ntop(int af, const void *addr, char *str, size_t len);
 int mpls_pton(int af, const char *src, void *addr, size_t alen);
+
+const char *netrom_ntop(int af, const void *addr, char *str, socklen_t len);
 
 extern int __iproute2_hz_internal;
 int __get_hz(void);
@@ -260,9 +262,11 @@ int print_timestamp(FILE *fp);
 void print_nlmsg_timestamp(FILE *fp, const struct nlmsghdr *n);
 
 unsigned int print_name_and_link(const char *fmt,
-				 const char *name, struct rtattr *tb[]);
+				 const char *name, struct rtattr *tb[])
+	__attribute__((format(printf, 1, 0)));
 
-#define BIT(nr)                 (1UL << (nr))
+
+#define BIT(nr)                 (UINT64_C(1) << (nr))
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -306,6 +310,7 @@ char *find_cgroup2_mount(bool do_mount);
 __u64 get_cgroup2_id(const char *path);
 char *get_cgroup2_path(__u64 id, bool full);
 int get_command_name(const char *pid, char *comm, size_t len);
+int get_task_name(pid_t pid, char *name, size_t len);
 
 int get_rtnl_link_stats_rta(struct rtnl_link_stats64 *stats64,
 			    struct rtattr *tb[]);
@@ -321,5 +326,58 @@ int get_time(unsigned int *time, const char *str);
 int get_time64(__s64 *time, const char *str);
 char *sprint_time(__u32 time, char *buf);
 char *sprint_time64(__s64 time, char *buf);
+
+int do_batch(const char *name, bool force,
+	     int (*cmd)(int argc, char *argv[], void *user), void *user);
+
+int parse_one_of(const char *msg, const char *realval, const char * const *list,
+		 size_t len, int *p_err);
+bool parse_on_off(const char *msg, const char *realval, int *p_err);
+
+int parse_mapping_num_all(__u32 *keyp, const char *key);
+int parse_mapping_gen(int *argcp, char ***argvp,
+		      int (*key_cb)(__u32 *keyp, const char *key),
+		      int (*mapping_cb)(__u32 key, char *value, void *data),
+		      void *mapping_cb_data);
+int parse_mapping(int *argcp, char ***argvp, bool allow_all,
+		  int (*mapping_cb)(__u32 key, char *value, void *data),
+		  void *mapping_cb_data);
+
+struct str_num_map {
+	const char *str;
+	unsigned int num;
+};
+
+int str_map_lookup_str(const struct str_num_map *map, const char *needle);
+const char *str_map_lookup_uint(const struct str_num_map *map,
+				unsigned int val);
+const char *str_map_lookup_u16(const struct str_num_map *map, uint16_t val);
+const char *str_map_lookup_u8(const struct str_num_map *map, uint8_t val);
+
+unsigned int get_str_char_count(const char *str, int match);
+int str_split_by_char(char *str, char **before, char **after, int match);
+
+#define INDENT_STR_MAXLEN 32
+
+struct indent_mem {
+	int indent_level;
+	char indent_str[INDENT_STR_MAXLEN + 1];
+};
+
+struct indent_mem *alloc_indent_mem(void);
+void free_indent_mem(struct indent_mem *mem);
+void inc_indent(struct indent_mem *mem);
+void dec_indent(struct indent_mem *mem);
+void print_indent(struct indent_mem *mem);
+
+struct proto {
+	int id;
+	const char *name;
+};
+
+int proto_a2n(unsigned short *id, const char *buf,
+	      const struct proto *proto_tb, size_t tb_len);
+const char *proto_n2a(unsigned short id, char *buf, int len,
+		      const struct proto *proto_tb, size_t tb_len);
 
 #endif /* __UTILS_H__ */

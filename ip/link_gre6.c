@@ -461,7 +461,6 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 
 	if (tb[IFLA_GRE_COLLECT_METADATA]) {
 		print_bool(PRINT_ANY, "external", "external ", true);
-		return;
 	}
 
 	if (tb[IFLA_GRE_FLAGS])
@@ -594,10 +593,10 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 
 		if (erspan_dir == 0)
 			print_string(PRINT_ANY, "erspan_dir",
-				     "erspan_dir ingress ", NULL);
+				     "erspan_dir %s ", "ingress");
 		else
 			print_string(PRINT_ANY, "erspan_dir",
-				     "erspan_dir egress ", NULL);
+				     "erspan_dir %s ", "egress");
 	}
 
 	if (tb[IFLA_GRE_ERSPAN_HWID]) {

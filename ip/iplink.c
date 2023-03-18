@@ -34,13 +34,7 @@
 #include "namespace.h"
 
 #define IPLINK_IOCTL_COMPAT	1
-#ifndef LIBDIR
-#define LIBDIR "/usr/lib"
-#endif
 
-#ifndef GSO_MAX_SIZE
-#define GSO_MAX_SIZE		65536
-#endif
 #ifndef GSO_MAX_SEGS
 #define GSO_MAX_SEGS		65535
 #endif
@@ -49,17 +43,32 @@
 static void usage(void) __attribute__((noreturn));
 static int iplink_have_newlink(void);
 
+void iplink_types_usage(void)
+{
+	/* Remember to add new entry here if new type is added. */
+	fprintf(stderr,
+		"TYPE := { amt | bareudp | bond | bond_slave | bridge | bridge_slave |\n"
+		"          dsa | dummy | erspan | geneve | gre | gretap | gtp | ifb |\n"
+		"          ip6erspan | ip6gre | ip6gretap | ip6tnl |\n"
+		"          ipip | ipoib | ipvlan | ipvtap |\n"
+		"          macsec | macvlan | macvtap |\n"
+		"          netdevsim | nlmon | rmnet | sit | team | team_slave |\n"
+		"          vcan | veth | vlan | vrf | vti | vxcan | vxlan | wwan |\n"
+		"          xfrm | virt_wifi }\n");
+}
+
 void iplink_usage(void)
 {
 	if (iplink_have_newlink()) {
 		fprintf(stderr,
-			"Usage: ip link add [link DEV] [ name ] NAME\n"
+			"Usage: ip link add [link DEV | parentdev NAME] [ name ] NAME\n"
 			"		    [ txqueuelen PACKETS ]\n"
 			"		    [ address LLADDR ]\n"
 			"		    [ broadcast LLADDR ]\n"
 			"		    [ mtu MTU ] [index IDX ]\n"
 			"		    [ numtxqueues QUEUE_COUNT ]\n"
 			"		    [ numrxqueues QUEUE_COUNT ]\n"
+			"		    [ netns { PID | NAME } ]\n"
 			"		    type TYPE [ ARGS ]\n"
 			"\n"
 			"	ip link delete { DEVICE | dev DEVICE | group DEVGROUP } type TYPE [ ARGS ]\n"
@@ -99,7 +108,11 @@ void iplink_usage(void)
 		"			 [ node_guid EUI64 ]\n"
 		"			 [ port_guid EUI64 ] ]\n"
 		"		[ { xdp | xdpgeneric | xdpdrv | xdpoffload } { off |\n"
+#ifdef HAVE_LIBBPF
+		"			  object FILE [ { section | program } NAME ] [ verbose ] |\n"
+#else
 		"			  object FILE [ section NAME ] [ verbose ] |\n"
+#endif
 		"			  pinned FILE } ]\n"
 		"		[ master DEVICE ][ vrf NAME ]\n"
 		"		[ nomaster ]\n"
@@ -107,8 +120,10 @@ void iplink_usage(void)
 		"		[ protodown { on | off } ]\n"
 		"		[ protodown_reason PREASON { on | off } ]\n"
 		"		[ gso_max_size BYTES ] | [ gso_max_segs PACKETS ]\n"
+		"		[ gro_max_size BYTES ]\n"
 		"\n"
 		"	ip link show [ DEVICE | group GROUP ] [up] [master DEV] [vrf NAME] [type TYPE]\n"
+		"		[nomaster]\n"
 		"\n"
 		"	ip link xstats type TYPE [ ARGS ]\n"
 		"\n"
@@ -120,13 +135,8 @@ void iplink_usage(void)
 		fprintf(stderr,
 			"\n"
 			"	ip link help [ TYPE ]\n"
-			"\n"
-			"TYPE := { vlan | veth | vcan | vxcan | dummy | ifb | macvlan | macvtap |\n"
-			"	   bridge | bond | team | ipoib | ip6tnl | ipip | sit | vxlan |\n"
-			"	   gre | gretap | erspan | ip6gre | ip6gretap | ip6erspan |\n"
-			"	   vti | nlmon | team_slave | bond_slave | bridge_slave |\n"
-			"	   ipvlan | ipvtap | geneve | bareudp | vrf | macsec | netdevsim | rmnet |\n"
-			"	   xfrm }\n");
+			"\n");
+		iplink_types_usage();
 	}
 	exit(-1);
 }
@@ -157,7 +167,7 @@ struct link_util *get_link_kind(const char *id)
 		if (strcmp(l->id, id) == 0)
 			return l;
 
-	snprintf(buf, sizeof(buf), LIBDIR "/ip/link_%s.so", id);
+	snprintf(buf, sizeof(buf), "%s/link_%s.so", get_ip_lib_dir(), id);
 	dlh = dlopen(buf, RTLD_LAZY);
 	if (dlh == NULL) {
 		/* look in current binary, only open once */
@@ -352,6 +362,7 @@ static int iplink_parse_vf(int vf, int *argcp, char ***argvp,
 	int len, argc = *argcp;
 	char **argv = *argvp;
 	struct rtattr *vfinfo;
+	int ret;
 
 	tivt.min_tx_rate = -1;
 	tivt.max_tx_rate = -1;
@@ -464,12 +475,9 @@ static int iplink_parse_vf(int vf, int *argcp, char ***argvp,
 			struct ifla_vf_spoofchk ivs;
 
 			NEXT_ARG();
-			if (matches(*argv, "on") == 0)
-				ivs.setting = 1;
-			else if (matches(*argv, "off") == 0)
-				ivs.setting = 0;
-			else
-				return on_off("spoofchk", *argv);
+			ivs.setting = parse_on_off("spoofchk", *argv, &ret);
+			if (ret)
+				return ret;
 			ivs.vf = vf;
 			addattr_l(&req->n, sizeof(*req), IFLA_VF_SPOOFCHK,
 				  &ivs, sizeof(ivs));
@@ -478,12 +486,9 @@ static int iplink_parse_vf(int vf, int *argcp, char ***argvp,
 			struct ifla_vf_rss_query_en ivs;
 
 			NEXT_ARG();
-			if (matches(*argv, "on") == 0)
-				ivs.setting = 1;
-			else if (matches(*argv, "off") == 0)
-				ivs.setting = 0;
-			else
-				return on_off("query_rss", *argv);
+			ivs.setting = parse_on_off("query_rss", *argv, &ret);
+			if (ret)
+				return ret;
 			ivs.vf = vf;
 			addattr_l(&req->n, sizeof(*req), IFLA_VF_RSS_QUERY_EN,
 				  &ivs, sizeof(ivs));
@@ -492,12 +497,9 @@ static int iplink_parse_vf(int vf, int *argcp, char ***argvp,
 			struct ifla_vf_trust ivt;
 
 			NEXT_ARG();
-			if (matches(*argv, "on") == 0)
-				ivt.setting = 1;
-			else if (matches(*argv, "off") == 0)
-				ivt.setting = 0;
-			else
-				invarg("Invalid \"trust\" value\n", *argv);
+			ivt.setting = parse_on_off("trust", *argv, &ret);
+			if (ret)
+				return ret;
 			ivt.vf = vf;
 			addattr_l(&req->n, sizeof(*req), IFLA_VF_TRUST,
 				  &ivt, sizeof(ivt));
@@ -580,6 +582,7 @@ static int iplink_parse_vf(int vf, int *argcp, char ***argvp,
 
 int iplink_parse(int argc, char **argv, struct iplink_req *req, char **type)
 {
+	bool move_netns = false;
 	char *name = NULL;
 	char *dev = NULL;
 	char *link = NULL;
@@ -595,6 +598,7 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req, char **type)
 	int index = 0;
 	int group = -1;
 	int addr_len = 0;
+	int err;
 
 	ret = argc;
 
@@ -684,6 +688,7 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req, char **type)
 					  IFLA_NET_NS_PID, &netns, 4);
 			else
 				invarg("Invalid \"netns\" value\n", *argv);
+			move_netns = true;
 		} else if (strcmp(*argv, "multicast") == 0) {
 			NEXT_ARG();
 			req->i.ifi_change |= IFF_MULTICAST;
@@ -738,12 +743,9 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req, char **type)
 			int carrier;
 
 			NEXT_ARG();
-			if (strcmp(*argv, "on") == 0)
-				carrier = 1;
-			else if (strcmp(*argv, "off") == 0)
-				carrier = 0;
-			else
-				return on_off("carrier", *argv);
+			carrier = parse_on_off("carrier", *argv, &err);
+			if (err)
+				return err;
 
 			addattr8(&req->n, sizeof(*req), IFLA_CARRIER, carrier);
 		} else if (strcmp(*argv, "vf") == 0) {
@@ -896,12 +898,9 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req, char **type)
 			unsigned int proto_down;
 
 			NEXT_ARG();
-			if (strcmp(*argv, "on") == 0)
-				proto_down = 1;
-			else if (strcmp(*argv, "off") == 0)
-				proto_down = 0;
-			else
-				return on_off("protodown", *argv);
+			proto_down = parse_on_off("protodown", *argv, &err);
+			if (err)
+				return err;
 			addattr8(&req->n, sizeof(*req), IFLA_PROTO_DOWN,
 				 proto_down);
 		} else if (strcmp(*argv, "protodown_reason") == 0) {
@@ -930,8 +929,7 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req, char **type)
 			unsigned int max_size;
 
 			NEXT_ARG();
-			if (get_unsigned(&max_size, *argv, 0) ||
-			    max_size > GSO_MAX_SIZE)
+			if (get_unsigned(&max_size, *argv, 0))
 				invarg("Invalid \"gso_max_size\" value\n",
 				       *argv);
 			addattr32(&req->n, sizeof(*req),
@@ -946,6 +944,19 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req, char **type)
 				       *argv);
 			addattr32(&req->n, sizeof(*req),
 				  IFLA_GSO_MAX_SEGS, max_segs);
+		}  else if (strcmp(*argv, "gro_max_size") == 0) {
+			unsigned int max_size;
+
+			NEXT_ARG();
+			if (get_unsigned(&max_size, *argv, 0))
+				invarg("Invalid \"gro_max_size\" value\n",
+				       *argv);
+			addattr32(&req->n, sizeof(*req),
+				  IFLA_GRO_MAX_SIZE, max_size);
+		} else if (strcmp(*argv, "parentdev") == 0) {
+			NEXT_ARG();
+			addattr_l(&req->n, sizeof(*req), IFLA_PARENT_DEV_NAME,
+				  *argv, strlen(*argv) + 1);
 		} else {
 			if (matches(*argv, "help") == 0)
 				usage();
@@ -983,9 +994,11 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req, char **type)
 		}
 	}
 
-	if (!(req->n.nlmsg_flags & NLM_F_CREATE) && index) {
+	if (index &&
+	    (!(req->n.nlmsg_flags & NLM_F_CREATE) &&
+	     !move_netns)) {
 		fprintf(stderr,
-			"index can be used only when creating devices.\n");
+			"index can be used only when creating devices or when moving device to another netns.\n");
 		exit(-1);
 	}
 
@@ -1022,6 +1035,9 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req, char **type)
 		/* Not renaming to the same name */
 		if (name == dev)
 			name = NULL;
+
+		if (index)
+			addattr32(&req->n, sizeof(*req), IFLA_NEW_IFINDEX, index);
 	} else {
 		if (name != dev) {
 			fprintf(stderr,
@@ -1108,7 +1124,12 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 		return -1;
 	}
 
-	if (rtnl_talk(&rth, &req.n, NULL) < 0)
+	if (echo_request)
+		ret = rtnl_echo_talk(&rth, &req.n, json, print_linkinfo);
+	else
+		ret = rtnl_talk(&rth, &req.n, NULL);
+
+	if (ret)
 		return -2;
 
 	/* remove device from cache; next use can refresh with new data */
@@ -1503,6 +1524,65 @@ static int do_set(int argc, char **argv)
 }
 #endif /* IPLINK_IOCTL_COMPAT */
 
+void print_mpls_link_stats(FILE *fp, const struct mpls_link_stats *stats,
+			   const char *indent)
+{
+	unsigned int cols[] = {
+		strlen("*X: bytes"),
+		strlen("packets"),
+		strlen("errors"),
+		strlen("dropped"),
+		strlen("noroute"),
+	};
+
+	if (is_json_context()) {
+		/* RX stats */
+		open_json_object("rx");
+		print_u64(PRINT_JSON, "bytes", NULL, stats->rx_bytes);
+		print_u64(PRINT_JSON, "packets", NULL, stats->rx_packets);
+		print_u64(PRINT_JSON, "errors", NULL, stats->rx_errors);
+		print_u64(PRINT_JSON, "dropped", NULL, stats->rx_dropped);
+		print_u64(PRINT_JSON, "noroute", NULL, stats->rx_noroute);
+		close_json_object();
+
+		/* TX stats */
+		open_json_object("tx");
+		print_u64(PRINT_JSON, "bytes", NULL, stats->tx_bytes);
+		print_u64(PRINT_JSON, "packets", NULL, stats->tx_packets);
+		print_u64(PRINT_JSON, "errors", NULL, stats->tx_errors);
+		print_u64(PRINT_JSON, "dropped", NULL, stats->tx_dropped);
+		close_json_object();
+	} else {
+		size_columns(cols, ARRAY_SIZE(cols), stats->rx_bytes,
+			     stats->rx_packets, stats->rx_errors,
+			     stats->rx_dropped, stats->rx_noroute);
+		size_columns(cols, ARRAY_SIZE(cols), stats->tx_bytes,
+			     stats->tx_packets, stats->tx_errors,
+			     stats->tx_dropped, 0);
+
+		fprintf(fp, "%sRX: %*s %*s %*s %*s %*s%s", indent,
+			cols[0] - 4, "bytes", cols[1], "packets",
+			cols[2], "errors", cols[3], "dropped",
+			cols[4], "noroute", _SL_);
+		fprintf(fp, "%s", indent);
+		print_num(fp, cols[0], stats->rx_bytes);
+		print_num(fp, cols[1], stats->rx_packets);
+		print_num(fp, cols[2], stats->rx_errors);
+		print_num(fp, cols[3], stats->rx_dropped);
+		print_num(fp, cols[4], stats->rx_noroute);
+		print_nl();
+
+		fprintf(fp, "%sTX: %*s %*s %*s %*s%s", indent,
+			cols[0] - 4, "bytes", cols[1], "packets",
+			cols[2], "errors", cols[3], "dropped", _SL_);
+		fprintf(fp, "%s", indent);
+		print_num(fp, cols[0], stats->tx_bytes);
+		print_num(fp, cols[1], stats->tx_packets);
+		print_num(fp, cols[2], stats->tx_errors);
+		print_num(fp, cols[3], stats->tx_dropped);
+	}
+}
+
 static void print_mpls_stats(FILE *fp, struct rtattr *attr)
 {
 	struct rtattr *mrtb[MPLS_STATS_MAX+1];
@@ -1514,23 +1594,11 @@ static void print_mpls_stats(FILE *fp, struct rtattr *attr)
 		return;
 
 	stats = RTA_DATA(mrtb[MPLS_STATS_LINK]);
-
-	fprintf(fp, "    mpls:\n");
-	fprintf(fp, "        RX: bytes  packets  errors  dropped  noroute\n");
-	fprintf(fp, "        ");
-	print_num(fp, 10, stats->rx_bytes);
-	print_num(fp, 8, stats->rx_packets);
-	print_num(fp, 7, stats->rx_errors);
-	print_num(fp, 8, stats->rx_dropped);
-	print_num(fp, 7, stats->rx_noroute);
-	fprintf(fp, "\n");
-	fprintf(fp, "        TX: bytes  packets  errors  dropped\n");
-	fprintf(fp, "        ");
-	print_num(fp, 10, stats->tx_bytes);
-	print_num(fp, 8, stats->tx_packets);
-	print_num(fp, 7, stats->tx_errors);
-	print_num(fp, 7, stats->tx_dropped);
-	fprintf(fp, "\n");
+	print_string(PRINT_FP, NULL, "    mpls:", NULL);
+	print_nl();
+	print_mpls_link_stats(fp, stats, "        ");
+	print_string(PRINT_FP, NULL, "%s", "\n");
+	fflush(fp);
 }
 
 static void print_af_stats_attr(FILE *fp, int ifindex, struct rtattr *attr)
@@ -1546,8 +1614,12 @@ static void print_af_stats_attr(FILE *fp, int ifindex, struct rtattr *attr)
 			continue;
 
 		if (!if_printed) {
-			fprintf(fp, "%u: %s\n", ifindex,
-				ll_index_to_name(ifindex));
+			print_uint(PRINT_ANY, "ifindex",
+				   "%u:", ifindex);
+			print_color_string(PRINT_ANY, COLOR_IFNAME, 
+					   "ifname", "%s",
+					   ll_index_to_name(ifindex));
+			print_nl();
 			if_printed = true;
 		}
 
@@ -1556,7 +1628,7 @@ static void print_af_stats_attr(FILE *fp, int ifindex, struct rtattr *attr)
 			print_mpls_stats(fp, i);
 			break;
 		default:
-			fprintf(fp, "    unknown af(%d)\n", i->rta_type);
+			fprintf(stderr, "    unknown af(%d)\n", i->rta_type);
 			break;
 		}
 	}
@@ -1630,7 +1702,10 @@ static int iplink_afstats(int argc, char **argv)
 		}
 	}
 
-	if (rtnl_statsdump_req_filter(&rth, AF_UNSPEC, filt_mask) < 0) {
+	new_json_obj(json);
+
+	if (rtnl_statsdump_req_filter(&rth, AF_UNSPEC, filt_mask,
+				      NULL, NULL) < 0) {
 		perror("Cannont send dump request");
 		return 1;
 	}
@@ -1640,6 +1715,7 @@ static int iplink_afstats(int argc, char **argv)
 		return 1;
 	}
 
+	delete_json_obj();
 	return 0;
 }
 

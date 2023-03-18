@@ -17,7 +17,6 @@
 #include <linux/tipc_netlink.h>
 #include <linux/tipc.h>
 #include <linux/genetlink.h>
-#include <libmnl/libmnl.h>
 
 #include "cmdl.h"
 #include "msg.h"
@@ -52,14 +51,13 @@ static int node_list_cb(const struct nlmsghdr *nlh, void *data)
 static int cmd_node_list(struct nlmsghdr *nlh, const struct cmd *cmd,
 			 struct cmdl *cmdl, void *data)
 {
-	char buf[MNL_SOCKET_BUFFER_SIZE];
-
 	if (help_flag) {
 		fprintf(stderr, "Usage: %s node list\n", cmdl->argv[0]);
 		return -EINVAL;
 	}
 
-	if (!(nlh = msg_init(buf, TIPC_NL_NODE_GET))) {
+	nlh = msg_init(TIPC_NL_NODE_GET);
+	if (!nlh) {
 		fprintf(stderr, "error, message initialisation failed\n");
 		return -1;
 	}
@@ -73,7 +71,6 @@ static int cmd_node_set_addr(struct nlmsghdr *nlh, const struct cmd *cmd,
 	char *str;
 	uint32_t addr;
 	struct nlattr *nest;
-	char buf[MNL_SOCKET_BUFFER_SIZE];
 
 	if (cmdl->argc != cmdl->optind + 1) {
 		fprintf(stderr, "Usage: %s node set address ADDRESS\n",
@@ -86,7 +83,8 @@ static int cmd_node_set_addr(struct nlmsghdr *nlh, const struct cmd *cmd,
 	if (!addr)
 		return -1;
 
-	if (!(nlh = msg_init(buf, TIPC_NL_NET_SET))) {
+	nlh = msg_init(TIPC_NL_NET_SET);
+	if (!nlh) {
 		fprintf(stderr, "error, message initialisation failed\n");
 		return -1;
 	}
@@ -126,7 +124,6 @@ static int cmd_node_get_addr(struct nlmsghdr *nlh, const struct cmd *cmd,
 static int cmd_node_set_nodeid(struct nlmsghdr *nlh, const struct cmd *cmd,
 			       struct cmdl *cmdl, void *data)
 {
-	char buf[MNL_SOCKET_BUFFER_SIZE];
 	uint8_t id[16] = {0,};
 	uint64_t *w0 = (uint64_t *) &id[0];
 	uint64_t *w1 = (uint64_t *) &id[8];
@@ -145,7 +142,7 @@ static int cmd_node_set_nodeid(struct nlmsghdr *nlh, const struct cmd *cmd,
 		return -EINVAL;
 	}
 
-	nlh = msg_init(buf, TIPC_NL_NET_SET);
+	nlh = msg_init(TIPC_NL_NET_SET);
 	if (!nlh) {
 		fprintf(stderr, "error, message initialisation failed\n");
 		return -1;
@@ -201,7 +198,6 @@ static int cmd_node_set_key(struct nlmsghdr *nlh, const struct cmd *cmd,
 	};
 	struct nlattr *nest;
 	struct opt *opt_algname, *opt_nodeid, *opt_master, *opt_rekeying;
-	char buf[MNL_SOCKET_BUFFER_SIZE];
 	uint8_t id[TIPC_NODEID_LEN] = {0,};
 	uint32_t rekeying = 0;
 	bool has_key = false;
@@ -240,10 +236,15 @@ get_ops:
 
 	/* Get algorithm name, default: "gcm(aes)" */
 	opt_algname = get_opt(opts, "algname");
-	if (!opt_algname)
+	if (!opt_algname) {
 		strcpy(input.key.alg_name, "gcm(aes)");
-	else
+	} else {
+		if (strlen(opt_algname->val) > TIPC_AEAD_ALG_NAME) {
+			fprintf(stderr, "error, invalid algname\n");
+			return -EINVAL;
+		}
 		strcpy(input.key.alg_name, opt_algname->val);
+	}
 
 	/* Get node identity */
 	opt_nodeid = get_opt(opts, "nodeid");
@@ -262,7 +263,7 @@ get_ops:
 	}
 
 	/* Init & do the command */
-	nlh = msg_init(buf, TIPC_NL_KEY_SET);
+	nlh = msg_init(TIPC_NL_KEY_SET);
 	if (!nlh) {
 		fprintf(stderr, "error, message initialisation failed\n");
 		return -1;
@@ -287,15 +288,13 @@ get_ops:
 static int cmd_node_flush_key(struct nlmsghdr *nlh, const struct cmd *cmd,
 			      struct cmdl *cmdl, void *data)
 {
-	char buf[MNL_SOCKET_BUFFER_SIZE];
-
 	if (help_flag) {
 		(cmd->help)(cmdl);
 		return -EINVAL;
 	}
 
 	/* Init & do the command */
-	nlh = msg_init(buf, TIPC_NL_KEY_FLUSH);
+	nlh = msg_init(TIPC_NL_KEY_FLUSH);
 	if (!nlh) {
 		fprintf(stderr, "error, message initialisation failed\n");
 		return -1;
@@ -332,14 +331,12 @@ static int nodeid_get_cb(const struct nlmsghdr *nlh, void *data)
 static int cmd_node_get_nodeid(struct nlmsghdr *nlh, const struct cmd *cmd,
 			       struct cmdl *cmdl, void *data)
 {
-	char buf[MNL_SOCKET_BUFFER_SIZE];
-
 	if (help_flag) {
 		(cmd->help)(cmdl);
 		return -EINVAL;
 	}
 
-	nlh = msg_init(buf, TIPC_NL_NET_GET);
+	nlh = msg_init(TIPC_NL_NET_GET);
 	if (!nlh) {
 		fprintf(stderr, "error, message initialisation failed\n");
 		return -1;
@@ -370,14 +367,13 @@ static int netid_get_cb(const struct nlmsghdr *nlh, void *data)
 static int cmd_node_get_netid(struct nlmsghdr *nlh, const struct cmd *cmd,
 			      struct cmdl *cmdl, void *data)
 {
-	char buf[MNL_SOCKET_BUFFER_SIZE];
-
 	if (help_flag) {
 		(cmd->help)(cmdl);
 		return -EINVAL;
 	}
 
-	if (!(nlh = msg_init(buf, TIPC_NL_NET_GET))) {
+	nlh = msg_init(TIPC_NL_NET_GET);
+	if (!nlh) {
 		fprintf(stderr, "error, message initialisation failed\n");
 		return -1;
 	}
@@ -389,7 +385,6 @@ static int cmd_node_set_netid(struct nlmsghdr *nlh, const struct cmd *cmd,
 			      struct cmdl *cmdl, void *data)
 {
 	int netid;
-	char buf[MNL_SOCKET_BUFFER_SIZE];
 	struct nlattr *nest;
 
 	if (help_flag) {
@@ -397,7 +392,8 @@ static int cmd_node_set_netid(struct nlmsghdr *nlh, const struct cmd *cmd,
 		return -EINVAL;
 	}
 
-	if (!(nlh = msg_init(buf, TIPC_NL_NET_SET))) {
+	nlh = msg_init(TIPC_NL_NET_SET);
+	if (!nlh) {
 		fprintf(stderr, "error, message initialisation failed\n");
 		return -1;
 	}

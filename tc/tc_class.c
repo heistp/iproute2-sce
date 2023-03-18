@@ -365,7 +365,7 @@ int print_class(struct nlmsghdr *n, void *arg)
 		if (q && q->print_copt)
 			q->print_copt(q, fp, tb[TCA_OPTIONS]);
 		else
-			fprintf(fp, "[cannot parse class parameters]");
+			fprintf(stderr, "[cannot parse class parameters]");
 	}
 	fprintf(fp, "\n");
 	if (show_stats) {
@@ -474,10 +474,6 @@ int do_class(int argc, char **argv)
 		return tc_class_modify(RTM_NEWTCLASS, NLM_F_CREATE, argc-1, argv+1);
 	if (matches(*argv, "delete") == 0)
 		return tc_class_modify(RTM_DELTCLASS, 0,  argc-1, argv+1);
-#if 0
-	if (matches(*argv, "get") == 0)
-		return tc_class_get(RTM_GETTCLASS, 0,  argc-1, argv+1);
-#endif
 	if (matches(*argv, "list") == 0 || matches(*argv, "show") == 0
 	    || matches(*argv, "lst") == 0)
 		return tc_class_list(argc-1, argv+1);
