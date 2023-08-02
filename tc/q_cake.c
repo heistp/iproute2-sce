@@ -111,7 +111,7 @@ static int cake_parse_opt(const struct qdisc_util *qu, int argc, char **argv,
 	int wash = -1;
 	int nat = -1;
 	int atm = -1;
-	int sce = -1;
+	unsigned short sce = -1;
 	int mpu = 0;
 
 	while (argc > 0) {
@@ -345,7 +345,7 @@ static int cake_parse_opt(const struct qdisc_util *qu, int argc, char **argv,
 			sce = 0xFFFF;
 		} else if (strcmp(*argv, "sce-thresh") == 0) {
 			NEXT_ARG();
-			if (get_u32(&sce, *argv, 0) || sce < 1 || sce > 1024) {
+			if (get_u16(&sce, *argv, 0) || sce < 1 || sce > 1024) {
 				fprintf(stderr,
 					"Illegal value for \"sce-thresh\": \"%s\"\n", *argv);
 				return -1;
@@ -448,7 +448,7 @@ static int cake_print_opt(const struct qdisc_util *qu, FILE *f, struct rtattr *o
 	int mpu = 0;
 	int atm = 0;
 	int nat = 0;
-	int sce = 0;
+	unsigned short sce = 0;
 
 	SPRINT_BUF(b2);
 
@@ -543,8 +543,8 @@ static int cake_print_opt(const struct qdisc_util *qu, FILE *f, struct rtattr *o
 		fwmark = rta_getattr_u32(tb[TCA_CAKE_FWMARK]);
 	}
 	if (tb[TCA_CAKE_SCE] &&
-	    RTA_PAYLOAD(tb[TCA_CAKE_SCE]) >= sizeof(__u32)) {
-		sce = rta_getattr_u32(tb[TCA_CAKE_SCE]);
+	    RTA_PAYLOAD(tb[TCA_CAKE_SCE]) >= sizeof(__u16)) {
+		sce = rta_getattr_u16(tb[TCA_CAKE_SCE]);
 	}
 
 	if (wash)
@@ -606,8 +606,8 @@ static int cake_print_opt(const struct qdisc_util *qu, FILE *f, struct rtattr *o
 	else if(!sce)
 		print_string(PRINT_FP, NULL, "no-sce ", NULL);
 	else
-		print_uint(PRINT_FP, NULL, "sce-thresh %u ", sce);
-	print_uint(PRINT_JSON, "sce", NULL, sce);
+		print_hu(PRINT_FP, NULL, "sce-thresh %hu ", sce);
+	print_hu(PRINT_JSON, "sce", NULL, sce);
 
 	return 0;
 }
