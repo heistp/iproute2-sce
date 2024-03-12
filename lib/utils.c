@@ -283,7 +283,65 @@ int get_time_rtt(unsigned int *val, const char *arg, int *raw)
 		*val += 1;
 
 	return 0;
+}
 
+/*
+ * get_freq allows specifying a rate of events, rather than of data flow,
+ * and is adapted from get_time_rtt above.
+ * The default unit is Hz, but this may be scaled up through kHz and MHz,
+ * or scaled down through RPM (ie. per 60 seconds).
+ */
+int get_freq(double *val, const char *arg, int *raw)
+{
+	double t;
+	unsigned long res;
+	char *p;
+
+	if (strchr(arg, '.') != NULL) {
+		t = strtod(arg, &p);
+		if (t < 0.0)
+			return -1;
+
+		/* no digits? */
+		if (!p || p == arg)
+			return -1;
+
+		/* over/underflow */
+		if ((t == HUGE_VALF || t == HUGE_VALL) && errno == ERANGE)
+			return -1;
+	} else {
+		res = strtoul(arg, &p, 0);
+
+		/* empty string? */
+		if (!p || p == arg)
+			return -1;
+
+		/* overflow */
+		if (res == ULONG_MAX && errno == ERANGE)
+			return -1;
+
+		t = (double)res;
+	}
+
+	if (p == arg)
+		return -1;
+	*raw = 1;
+
+	if (*p) {
+		*raw = 0;
+		if (strcasecmp(p, "Hz") == 0)
+			t *= 1.0; /* allow suffix, do nothing */
+		else if (strcasecmp(p, "kHz") == 0)
+			t *= 1000.0; /* kilohertz */
+		else if (strcasecmp(p, "MHz") == 0)
+			t *= 1000000.0; /* megahertz */
+		else if (strcasecmp(p, "rpm") == 0)
+			t /= 60.0; /* RPM */
+		else
+			return -1;
+	}
+
+	return 0;
 }
 
 int get_u64(__u64 *val, const char *arg, int base)
