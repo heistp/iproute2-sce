@@ -72,6 +72,7 @@ TCMODULES += q_cnq_cobalt.o
 TCMODULES += q_cnq_codel_af.o
 TCMODULES += q_twin_codel_af.o
 TCMODULES += q_lfq_cobalt.o
+TCMODULES += q_deltic.o
 TCMODULES += q_hhf.o
 TCMODULES += q_clsact.o
 TCMODULES += e_bpf.o
