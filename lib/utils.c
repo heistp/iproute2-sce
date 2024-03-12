@@ -291,7 +291,7 @@ int get_time_rtt(unsigned int *val, const char *arg, int *raw)
  * The default unit is Hz, but this may be scaled up through kHz and MHz,
  * or scaled down through RPM (ie. per 60 seconds).
  */
-int get_freq(double *val, const char *arg, int *raw)
+int get_freq(double *val, const char *arg, bool *raw)
 {
 	double t;
 	unsigned long res;

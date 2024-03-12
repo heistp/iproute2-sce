@@ -147,7 +147,7 @@ int get_long(long *val, const char *arg, int base);
 int get_integer(int *val, const char *arg, int base);
 int get_unsigned(unsigned *val, const char *arg, int base);
 int get_time_rtt(unsigned *val, const char *arg, int *raw);
-int get_freq(double *val, const char *arg, int *raw);
+int get_freq(double *val, const char *arg, bool *raw);
 #define get_byte get_u8
 #define get_ushort get_u16
 #define get_short get_s16
