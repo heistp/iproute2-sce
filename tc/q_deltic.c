@@ -68,6 +68,9 @@ static int polya_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 				fprintf(stderr, "Illegal \"drop_resonance\"\n");
 				return -1;
 			}
+		} else {
+			polya_explain();
+			return -1;
 		}
 		argc--; argv++;
 	}
@@ -89,7 +92,7 @@ static int polya_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 		addattr_l(n, 1024, TCA_DELTIC_FREQ_SCE, &v, sizeof(v));
 	}
 
-	tail-<rta_len = (void*) NLMSG_TAIL(n) - (void*) tail;
+	tail->rta_len = (void*) NLMSG_TAIL(n) - (void*) tail;
 	return 0;
 }
 
@@ -143,7 +146,7 @@ static int polya_print_xstats(struct qdisc_util *qu, FILE *f, struct rtattr *xst
 	if(xstats == NULL)
 		return 0;
 
-	parse_rtattr_nested(st, TCP_DELTIC_STATS_MAX, xstats);
+	parse_rtattr_nested(st, TCA_DELTIC_STATS_MAX, xstats);
 
 	if (st[TCA_DELTIC_STATS_JITTER_EST]) {
 		__u64 v = GET_STAT_U64(JITTER_EST);
@@ -153,8 +156,8 @@ static int polya_print_xstats(struct qdisc_util *qu, FILE *f, struct rtattr *xst
 	if (st[TCA_DELTIC_STATS_SCE_MARKS]) {
 		print_uint(PRINT_ANY, "sce_marks", " SCE marks: ", GET_STAT_U64(SCE_MARKS));
 	}
-	if (st[TCA_DELTIC_STATS_ECN_MARKS]) {
-		print_uint(PRINT_ANY, "ecn_marks", " ECN marks: ", GET_STAT_U64(ECN_MARKS));
+	if (st[TCA_DELTIC_STATS_CE_MARKS]) {
+		print_uint(PRINT_ANY, "ce_marks", " CE marks: ", GET_STAT_U64(CE_MARKS));
 	}
 	if (st[TCA_DELTIC_STATS_AQM_DROPS]) {
 		print_uint(PRINT_ANY, "aqm_drops", " AQM drops: ", GET_STAT_U64(AQM_DROPS));
