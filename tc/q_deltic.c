@@ -113,21 +113,21 @@ static int polya_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 		if(!v)
 			print_string(PRINT_ANY, "no_sce", "no-sce ", NULL);
 		else
-			print_double(PRINT_ANY, "sce_resonance", "sce-resonance %gHz ", v);
+			print_float(PRINT_ANY, "sce_resonance", "sce-resonance %gHz ", v);
 	}
 	if (tb[TCA_DELTIC_FREQ_ECN] && RTA_PAYLOAD(tb[TCA_DELTIC_FREQ_ECN]) >= sizeof(__u32)) {
 		v = rta_getattr_u32(tb[TCA_DELTIC_FREQ_ECN]) / 65536.0;
 		if(!v)
 			print_string(PRINT_ANY, "no_ecn", "no-ecn ", NULL);
 		else
-			print_double(PRINT_ANY, "ecn_resonance", "ecn-resonance %gHz ", v);
+			print_float(PRINT_ANY, "ecn_resonance", "ecn-resonance %gHz ", v);
 	}
 	if (tb[TCA_DELTIC_FREQ_DROP] && RTA_PAYLOAD(tb[TCA_DELTIC_FREQ_DROP]) >= sizeof(__u32)) {
 		v = rta_getattr_u32(tb[TCA_DELTIC_FREQ_DROP]) / 65536.0;
 		if(!v)
 			print_string(PRINT_ANY, "no_drop", "no-drop ", NULL);
 		else
-			print_double(PRINT_ANY, "drop_resonance", "drop-resonance %gHz ", v);
+			print_float(PRINT_ANY, "drop_resonance", "drop-resonance %gHz ", v);
 	}
 
 	return 0;
@@ -150,7 +150,7 @@ static int polya_print_xstats(struct qdisc_util *qu, FILE *f, struct rtattr *xst
 
 	if (st[TCA_DELTIC_STATS_JITTER_EST]) {
 		__u64 v = GET_STAT_U64(JITTER_EST);
-		print_uint(PRINT_JSON, "jitter_est", NULL, v)
+		print_uint(PRINT_JSON, "jitter_est", NULL, v);
 		print_string(PRINT_FP, NULL, " jitter estimate: %s", sprint_time(v, b1));
 	}
 	if (st[TCA_DELTIC_STATS_SCE_MARKS]) {
