@@ -149,7 +149,7 @@ static int polya_print_xstats(struct qdisc_util *qu, FILE *f, struct rtattr *xst
 	parse_rtattr_nested(st, TCA_DELTIC_STATS_MAX, xstats);
 
 	if (st[TCA_DELTIC_STATS_JITTER_EST]) {
-		__u64 v = GET_STAT_U64(JITTER_EST);
+		unsigned int v = GET_STAT_U32(JITTER_EST);
 		print_uint(PRINT_JSON, "jitter_est", NULL, v);
 		print_string(PRINT_FP, NULL, " jitter estimate: %s", sprint_time(v, b1));
 	}
