@@ -154,13 +154,13 @@ static int polya_print_xstats(struct qdisc_util *qu, FILE *f, struct rtattr *xst
 		print_string(PRINT_FP, NULL, " jitter estimate: %s", sprint_time(v, b1));
 	}
 	if (st[TCA_DELTIC_STATS_SCE_MARKS]) {
-		print_uint(PRINT_ANY, "sce_marks", " SCE marks: ", GET_STAT_U64(SCE_MARKS));
+		print_uint(PRINT_ANY, "sce_marks", " SCE marks: %lu", GET_STAT_U64(SCE_MARKS));
 	}
 	if (st[TCA_DELTIC_STATS_CE_MARKS]) {
-		print_uint(PRINT_ANY, "ce_marks", " CE marks: ", GET_STAT_U64(CE_MARKS));
+		print_uint(PRINT_ANY, "ce_marks", " CE marks: %lu", GET_STAT_U64(CE_MARKS));
 	}
 	if (st[TCA_DELTIC_STATS_AQM_DROPS]) {
-		print_uint(PRINT_ANY, "aqm_drops", " AQM drops: ", GET_STAT_U64(AQM_DROPS));
+		print_uint(PRINT_ANY, "aqm_drops", " AQM drops: %lu", GET_STAT_U64(AQM_DROPS));
 	}
 
 	return 0;
