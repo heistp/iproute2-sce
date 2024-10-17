@@ -269,7 +269,7 @@ static int deltic_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 		}
 	}
 	if (bandwidth || unlimited)
-		addattr64(n, 1024, TCA_DELTIC_BASE_RATE64, &bandwidth);
+		addattr64(n, 1024, TCA_DELTIC_BASE_RATE64, bandwidth);
 	if (atm != -1)
 		addattr8(n, 1024, TCA_DELTIC_ATM, atm);
 	if (overhead_set)
@@ -287,6 +287,11 @@ static int deltic_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 {
 	struct rtattr *tb[TCA_DELTIC_MAX + 1];
 	double v = 0;
+	__u64 bandwidth = 0;
+	int overhead = 0;
+	int raw = 0;
+	int mpu = 0;
+	int atm = 0;
 
 //	SPRINT_BUF(b1);
 
@@ -402,7 +407,7 @@ static int deltic_print_xstats(struct qdisc_util *qu, FILE *f, struct rtattr *xs
 static int polya_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 				struct nlmsghdr *n, const char *dev)
 {
-	deltic_parse_opt(qu, argc, argv, n, dev, POLYA);
+	return deltic_parse_opt(qu, argc, argv, n, dev, POLYA);
 }
 
 struct qdisc_util deltic_polya_qdisc_util = {
@@ -415,7 +420,7 @@ struct qdisc_util deltic_polya_qdisc_util = {
 static int boroshne_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 				struct nlmsghdr *n, const char *dev)
 {
-	deltic_parse_opt(qu, argc, argv, n, dev, BOROSHNE);
+	return deltic_parse_opt(qu, argc, argv, n, dev, BOROSHNE);
 }
 
 struct qdisc_util deltic_boroshne_qdisc_util = {
