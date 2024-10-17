@@ -1,0 +1,37 @@
+.TH DELTIC 8 "12 March 2024" "iproute2" "Linux"
+.SH NAME
+DELTIC \- Delay Time Control (DelTiC)
+.SH SYNOPSIS
+.nf
+.B tc qdisc ... deltic_polya
+.br
+[
+.BR sce-resonance
+FREQ |
+.BR no-sce
+]
+.br
+[
+.BR ecn-resonance
+FREQ |
+.BR no-ecn
+]
+.br
+[
+.BR drop-resonance
+FREQ |
+.BR no-drop
+]
+.fi
+
+
+.SH DESCRIPTION
+DelTiC (Delay Time Control) is a modern time-domain AQM based on a delta-sigma control loop, which is in the family of PID controllers.  An automatic estimator for txop jitter is included, and this jitter is automatically subtracted from the queue sojourn time fed into the control loop.
+
+This man page describes a family of qdiscs based on the DelTiC algorithm.  They are given names from the Ukrainian language related to agriculture:
+
+.TP deltic_polya
+"Polya" means "fields", which in Ukraine are particularly fertile due to the clay-rich "black earth" in much of the country.  The
+.B deltic_polya
+qdisc is a minimal qdisc originally developed to test the AQM in isolation, but may also be used as a leaf qdisc in custom QoS arrangements.  There is a single queue managed by three AQM instances, one applying SCE marks (if so configured) at a high frequency and low queue depth, a second applying RFC-3168 compliant CE marks (or dropping Not-ECT packets) at a moderate frequency and queue depth, and a third which starts to unconditionally drop packets if the queue depth appears to be insufficiently controlled by the other two AQMs.
+
