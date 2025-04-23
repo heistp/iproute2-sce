@@ -48,7 +48,7 @@ static void deltic_explain(DelticVariant var)
 	}
 }
 
-static int deltic_parse_opt(struct qdisc_util *qu, int argc, char **argv,
+static int deltic_parse_opt(const struct qdisc_util *qu, int argc, char **argv,
 				struct nlmsghdr *n, const char *dev, DelticVariant var)
 {
 	struct rtattr *tail;
@@ -283,7 +283,7 @@ static int deltic_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 	return 0;
 }
 
-static int deltic_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
+static int deltic_print_opt(const struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 {
 	struct rtattr *tb[TCA_DELTIC_MAX + 1];
 	double v = 0;
@@ -375,7 +375,8 @@ static int deltic_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 #define GET_STAT_U32(attr) rta_getattr_u32(st[TCA_DELTIC_STATS_ ## attr])
 #define GET_STAT_U64(attr) rta_getattr_u64(st[TCA_DELTIC_STATS_ ## attr])
 
-static int deltic_print_xstats(struct qdisc_util *qu, FILE *f, struct rtattr *xstats)
+static int deltic_print_xstats(const struct qdisc_util *qu, FILE *f,
+		struct rtattr *xstats)
 {
 	struct rtattr *st[TCA_DELTIC_STATS_MAX + 1];
 
@@ -404,7 +405,7 @@ static int deltic_print_xstats(struct qdisc_util *qu, FILE *f, struct rtattr *xs
 	return 0;
 }
 
-static int polya_parse_opt(struct qdisc_util *qu, int argc, char **argv,
+static int polya_parse_opt(const struct qdisc_util *qu, int argc, char **argv,
 				struct nlmsghdr *n, const char *dev)
 {
 	return deltic_parse_opt(qu, argc, argv, n, dev, POLYA);
@@ -417,7 +418,7 @@ struct qdisc_util deltic_polya_qdisc_util = {
 	.print_xstats	= deltic_print_xstats,
 };
 
-static int boroshne_parse_opt(struct qdisc_util *qu, int argc, char **argv,
+static int boroshne_parse_opt(const struct qdisc_util *qu, int argc, char **argv,
 				struct nlmsghdr *n, const char *dev)
 {
 	return deltic_parse_opt(qu, argc, argv, n, dev, BOROSHNE);

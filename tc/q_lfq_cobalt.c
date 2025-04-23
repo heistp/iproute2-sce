@@ -60,7 +60,7 @@ static void explain(void)
 "                (* marks defaults)\n");
 }
 
-static int lfq_cobalt_parse_opt(struct qdisc_util *qu, int argc, char **argv,
+static int lfq_cobalt_parse_opt(const struct qdisc_util *qu, int argc, char **argv,
 			  struct nlmsghdr *n, const char *dev)
 {
 	struct lfq_cobalt_preset *preset, *preset_set = NULL;
@@ -287,7 +287,8 @@ static int lfq_cobalt_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 	return 0;
 }
 
-static int lfq_cobalt_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
+static int lfq_cobalt_print_opt(const struct qdisc_util *qu, FILE *f,
+		struct rtattr *opt)
 {
 	struct rtattr *tb[TCA_CAKE_MAX + 1];
 	unsigned int interval = 0;
@@ -371,7 +372,7 @@ static int lfq_cobalt_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *o
 	return 0;
 }
 
-static int lfq_cobalt_print_xstats(struct qdisc_util *qu, FILE *f,
+static int lfq_cobalt_print_xstats(const struct qdisc_util *qu, FILE *f,
 			     struct rtattr *xstats)
 {
 	return 0;
